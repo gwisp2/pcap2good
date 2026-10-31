@@ -127,10 +127,14 @@ The build needs two local dependencies; neither is committed:
   and fixes its clock for wasm.
 
 ```console
-$ git clone --depth 1 https://gitlab.com/Dimbreath/animegamedata2 3rdparty/AnimeGameData
-$ ./scripts/fetch-auto-artifactarium.ps1   # or .sh on other platforms
+$ ./scripts/fetch-game-data.ps1              # or .sh on other platforms
+$ ./scripts/fetch-auto-artifactarium.ps1     # or .sh on other platforms
 $ cargo build --release
 ```
+
+The first script downloads only the 12 files the build reads (about 25 MB); a
+full AnimeGameData checkout moved or linked to `3rdparty/AnimeGameData` works
+too. The second downloads and patches `auto-artifactarium`.
 
 The build reads names, artifact sets, affixes and related tables from the data
 directory and embeds them in the binary, so decoding itself works fully
@@ -168,6 +172,25 @@ $ wasm-bindgen target/wasm32-unknown-unknown/release/post_irminsul.wasm \
 
 `web/pkg` is generated and gitignored. The page needs a real HTTP server (ES
 modules and `fetch` do not work from `file://`).
+
+## Deploying to GitHub Pages
+
+GitHub Pages only serves static files, so the wasm package is built in CI. The
+[`pages` workflow](.github/workflows/pages.yml) does this on every push:
+
+1. Push the repository to GitHub.
+2. Open **Settings → Pages → Build and deployment** and set **Source** to
+   **GitHub Actions**.
+3. Push to `main` or `master`, or run **Deploy web wrapper** from the Actions
+   tab.
+
+The site is served at `https://<user>.github.io/<repo>/`. The workflow fetches
+the pinned game data, downloads and patches `auto-artifactarium`, installs the
+matching `wasm-bindgen-cli`, builds `web/pkg`, and deploys `web/`.
+
+Nothing generated or machine-specific is committed: `3rdparty/`, `vendor/`,
+`target/` and `web/pkg/` are gitignored. If your default branch is neither
+`main` nor `master`, update the `on.push.branches` list in the workflow.
 
 ## Differences from Irminsul
 

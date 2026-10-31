@@ -11,6 +11,7 @@ try {
         throw "wasm-bindgen-cli was not found. Install it with: cargo install wasm-bindgen-cli --version $WasmBindgenVersion"
     }
 
+    & (Join-Path $root "scripts/fetch-game-data.ps1")
     & (Join-Path $root "scripts/fetch-auto-artifactarium.ps1")
 
     cargo build --release --target wasm32-unknown-unknown --lib
