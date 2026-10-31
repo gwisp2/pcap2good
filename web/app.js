@@ -13,6 +13,7 @@ const downloadButton = document.querySelector("#download-button");
 const status = document.querySelector("#status");
 const result = document.querySelector("#result");
 const stats = document.querySelector("#stats");
+const extractList = document.querySelector("#extract-list");
 const warnings = document.querySelector("#warnings");
 const warningList = document.querySelector("#warning-list");
 const output = document.querySelector("#output");
@@ -136,9 +137,6 @@ function render(data) {
     ["Game packets", data.capture.gamePackets],
     ["Commands decoded", data.decode.commands],
     ["Handshakes", data.decode.handshakes],
-    ["Characters", data.good.characters.length],
-    ["Artifacts", data.good.artifacts.length],
-    ["Weapons", data.good.weapons.length],
   ];
 
   stats.replaceChildren(
@@ -152,6 +150,8 @@ function render(data) {
       return cell;
     }),
   );
+
+  renderExtracted(data);
 
   warningList.replaceChildren(
     ...data.warnings.map((warning) => {
@@ -182,6 +182,56 @@ function render(data) {
 
   result.hidden = false;
   downloadButton.hidden = false;
+}
+
+function renderExtracted(data) {
+  const materials = data.good.materials ?? {};
+  const itemNames = Object.keys(materials).filter((name) => name !== "Mora");
+  const mora = Number(materials.Mora ?? 0);
+
+  const entries = [
+    { label: "Characters", count: data.good.characters.length },
+    { label: "Artifacts", count: data.good.artifacts.length },
+    { label: "Weapons", count: data.good.weapons.length },
+    { label: "Items", count: itemNames.length, unit: "type" },
+    { label: "Mora", count: mora, format: "number" },
+  ];
+
+  extractList.replaceChildren(
+    ...entries.map(({ label, count, unit, format }) => {
+      const found = count > 0;
+      const item = document.createElement("li");
+      item.className = `extract-item ${found ? "found" : "missing"}`;
+
+      const mark = document.createElement("span");
+      mark.className = "extract-mark";
+      mark.setAttribute("aria-hidden", "true");
+      mark.textContent = found ? "✓" : "✕";
+
+      const name = document.createElement("span");
+      name.className = "extract-label";
+      name.textContent = label;
+
+      const value = document.createElement("span");
+      value.className = "extract-value";
+      if (!found) {
+        value.textContent = "none";
+      } else if (format === "number") {
+        value.textContent = count.toLocaleString();
+      } else if (unit) {
+        value.textContent = `${count} ${unit}${count === 1 ? "" : "s"}`;
+      } else {
+        value.textContent = String(count);
+      }
+
+      const status = document.createElement("span");
+      status.className = "visually-hidden";
+      status.textContent = found ? "extracted" : "not extracted";
+
+      item.append(mark, name, value, status);
+      return item;
+    }),
+  );
 }
 
 function formatBytes(bytes) {

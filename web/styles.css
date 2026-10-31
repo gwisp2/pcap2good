@@ -206,6 +206,72 @@ button.secondary:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.extracted {
+  margin-top: 1.5rem;
+}
+
+.extract-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.extract-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.extract-item.found {
+  border-color: rgb(99 193 116 / 35%);
+}
+
+.extract-item.missing {
+  border-color: rgb(242 139 130 / 30%);
+}
+
+.extract-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.extract-item.found .extract-mark {
+  background: #63c174;
+  color: #08150b;
+}
+
+.extract-item.missing .extract-mark {
+  background: var(--error);
+  color: #210706;
+}
+
+.extract-label {
+  flex: 1 1 auto;
+}
+
+.extract-value {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.extract-item.found .extract-value {
+  color: var(--text);
+}
+
 #warnings ul {
   margin: 0;
   padding: 0;
