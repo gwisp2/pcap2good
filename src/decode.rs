@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use auto_artifactarium::{
     ConnectionPacket, GameCommand, GamePacket, GameSniffer, matches_avatar_packet,
-    matches_item_packet,
+    matches_item_packet, matches_player_data_packet,
 };
 use base64::prelude::*;
 use flate2::read::GzDecoder;
@@ -89,6 +89,9 @@ impl Decoder {
                         tracing::info!("Found avatar packet with {} avatars", avatars.len());
                         self.player_data.process_characters(&avatars);
                         self.stats.avatar_packets += 1;
+                    } else if let Some(props) = matches_player_data_packet(&command) {
+                        tracing::info!("Found player data packet with {} props", props.len());
+                        self.player_data.process_player_props(props);
                     }
                 }
             }

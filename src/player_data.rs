@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 use crate::gamedata::{GameData, Property, SkillType};
 use crate::good::{self, fake_uninitialized_4th_line};
 
+/// `PROP_PLAYER_SCOIN`: the player's Mora balance, delivered in the player
+/// property map (`PlayerDataNotify` / `PlayerPropNotify`) rather than in the
+/// item store.
+pub const PROP_PLAYER_SCOIN: u32 = 10016;
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ExportSettings {
@@ -17,6 +22,7 @@ pub struct PlayerData {
     game_data: GameData,
     characters: Vec<AvatarInfo>,
     items: Vec<Item>,
+    player_props: HashMap<u32, i64>,
 
     character_equip_guid_map: HashMap<u64, u32>,
 }
@@ -27,6 +33,7 @@ impl PlayerData {
             game_data,
             characters: Vec::new(),
             items: Vec::new(),
+            player_props: HashMap::new(),
             character_equip_guid_map: HashMap::new(),
         }
     }
@@ -44,6 +51,11 @@ impl PlayerData {
 
     pub fn process_items(&mut self, items: &[Item]) {
         self.items = items.into();
+    }
+
+    pub fn process_player_props(&mut self, props: HashMap<u32, i64>) {
+        // `PlayerPropNotify` only carries the properties that changed.
+        self.player_props.extend(props);
     }
 
     pub fn export_genshin_optimizer(&self, settings: &ExportSettings) -> good::Good {
@@ -249,7 +261,8 @@ impl PlayerData {
     }
 
     pub fn export_genshin_optimizer_materials(&self) -> HashMap<String, u32> {
-        self.items
+        let mut materials: HashMap<String, u32> = self
+            .items
             .iter()
             .filter_map(|item| {
                 if !item.has_material() {
@@ -260,7 +273,17 @@ impl PlayerData {
 
                 Some((good::to_good_key(name), material.count))
             })
-            .collect()
+            .collect();
+
+        // Mora is a virtual currency and never appears in the item store, so it
+        // is sourced from the player property map instead.
+        if let Some(&mora) = self.player_props.get(&PROP_PLAYER_SCOIN)
+            && mora > 0
+        {
+            materials.insert("Mora".to_string(), mora.min(u32::MAX as i64) as u32);
+        }
+
+        materials
     }
 
     /// Name of the character an item is equipped to, if any.

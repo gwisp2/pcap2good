@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use auto_artifactarium::r#gen::protos::{
-    AvatarDataNotify, AvatarInfo, Equip, Item, Material, PacketWithItems, PropValue, Reliquary,
-    Weapon, equip, item,
+    AvatarDataNotify, AvatarInfo, Equip, Item, Material, PacketWithItems, PropMapEntry, PropValue,
+    Reliquary, Weapon, equip, item,
 };
 use base64::prelude::*;
+use post_irminsul::player_data::PROP_PLAYER_SCOIN;
 use protobuf::Message;
 
 const ETHERNET_HEADER_LEN: usize = 14;
@@ -15,6 +16,7 @@ const ETHERTYPE_IPV4: u16 = 0x0800;
 
 const PLAYER_STORE_NOTIFY: u16 = 22160;
 const AVATAR_DATA_NOTIFY: u16 = 27799;
+const PLAYER_PROP_NOTIFY: u16 = 130;
 
 const ARTIFACT_ITEM_ID: u32 = 31534; // Marechaussee Hunter circlet, 5 stars.
 const WEAPON_ITEM_ID: u32 = 11505; // Primordial Jade Cutter, 5 stars.
@@ -214,10 +216,32 @@ fn items_message() -> Vec<u8> {
     packet.write_to_bytes().unwrap()
 }
 
+fn mora_message(mora: i64) -> Vec<u8> {
+    let mut entry = PropMapEntry::new();
+    entry.key = PROP_PLAYER_SCOIN;
+    entry.value = protobuf::MessageField::some(PropValue {
+        type_: PROP_PLAYER_SCOIN,
+        val: mora,
+        ..Default::default()
+    });
+
+    let entry = entry.write_to_bytes().unwrap();
+    debug_assert!(entry.len() < 0x80);
+
+    // The field number is arbitrary: the matcher locates the player prop map
+    // by content rather than by field number.
+    let mut body = Vec::new();
+    body.push((3 << 3) | 2); // field 3, length-delimited
+    body.push(entry.len() as u8);
+    body.extend_from_slice(&entry);
+    body
+}
+
 fn capture_with_game_data() -> Vec<Vec<u8>> {
     let commands = [
         game_command(AVATAR_DATA_NOTIFY, character_message()),
         game_command(PLAYER_STORE_NOTIFY, items_message()),
+        game_command(PLAYER_PROP_NOTIFY, mora_message(123_456)),
     ];
 
     commands
@@ -305,6 +329,7 @@ fn decodes_characters_weapons_and_artifacts() {
 
     // Materials are exported too.
     assert_eq!(good["materials"]["Sunsettia"], 1);
+    assert_eq!(good["materials"]["Mora"], 123_456);
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(

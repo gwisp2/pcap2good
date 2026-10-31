@@ -26,6 +26,9 @@ $ postirminsul decode capture.pcap > good.json
 $ postirminsul decode capture.pcap | jq '.artifacts | length'
 ```
 
+When the capture contains a player property update, the player's Mora balance is
+exported in `materials` as `Mora`.
+
 ## Capturing
 
 The capture must contain the connection handshake with the game server, since

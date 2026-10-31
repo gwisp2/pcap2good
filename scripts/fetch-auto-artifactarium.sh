@@ -5,7 +5,10 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 revision="abbbf7a3f58846512250a789a76be2d3cdb115c1"
 repository="https://github.com/konkers/auto-artifactarium"
 target="$root/vendor/auto-artifactarium"
-patch="$root/patches/auto-artifactarium-web-time.patch"
+patches=(
+    "$root/patches/auto-artifactarium-web-time.patch"
+    "$root/patches/auto-artifactarium-mora.patch"
+)
 
 force=false
 if [[ "${1:-}" == "--force" ]]; then
@@ -13,7 +16,8 @@ if [[ "${1:-}" == "--force" ]]; then
 fi
 
 if [[ -f "$target/Cargo.toml" && "$force" == false ]]; then
-    if ! grep -q '^use web_time::SystemTime;$' "$target/src/kcp.rs"; then
+    if ! grep -q '^use web_time::SystemTime;$' "$target/src/kcp.rs" \
+        || ! grep -q 'matches_player_data_packet' "$target/src/lib.rs"; then
         echo "vendor/auto-artifactarium exists but is not patched. Re-run with --force." >&2
         exit 1
     fi
@@ -31,8 +35,10 @@ git -C "$temporary/auto-artifactarium" checkout --quiet "$revision"
 
 # Apply while this is still the cloned repository. Applying after moving it
 # into gitignored `vendor/` makes git skip the paths.
-echo "Applying $patch"
-git -C "$temporary/auto-artifactarium" apply "$patch"
+for patch in "${patches[@]}"; do
+    echo "Applying $patch"
+    git -C "$temporary/auto-artifactarium" apply "$patch"
+done
 
 # The vendor directory only needs the working tree.
 rm -rf "$temporary/auto-artifactarium/.git"

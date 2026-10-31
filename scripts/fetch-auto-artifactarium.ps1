@@ -7,13 +7,22 @@ $root = Split-Path -Parent $PSScriptRoot
 $revision = "abbbf7a3f58846512250a789a76be2d3cdb115c1"
 $repository = "https://github.com/konkers/auto-artifactarium"
 $target = Join-Path $root "vendor/auto-artifactarium"
-$patch = Join-Path $root "patches/auto-artifactarium-web-time.patch"
+$patches = @(
+    (Join-Path $root "patches/auto-artifactarium-web-time.patch"),
+    (Join-Path $root "patches/auto-artifactarium-mora.patch")
+)
 
 $targetManifest = Join-Path $target "Cargo.toml"
 $targetKcp = Join-Path $target "src/kcp.rs"
+$targetLib = Join-Path $target "src/lib.rs"
 
 if ((Test-Path $targetManifest) -and -not $Force) {
-    if (-not (Select-String -Path $targetKcp -Pattern '^use web_time::SystemTime;$' -Quiet)) {
+    $webTimePatched =
+        Select-String -Path $targetKcp -Pattern '^use web_time::SystemTime;$' -Quiet
+    $moraPatched =
+        Select-String -Path $targetLib -Pattern 'matches_player_data_packet' -Quiet
+
+    if (-not ($webTimePatched -and $moraPatched)) {
         throw "vendor/auto-artifactarium exists but is not patched. Re-run with -Force."
     }
 
@@ -40,10 +49,12 @@ try {
 
     # Apply while this is still the cloned repository. Applying after moving it
     # into gitignored `vendor/` makes git skip the paths.
-    Write-Host "Applying $patch"
-    git -C $checkout apply $patch
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to apply $patch"
+    foreach ($patch in $patches) {
+        Write-Host "Applying $patch"
+        git -C $checkout apply $patch
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to apply $patch"
+        }
     }
 
     # The vendor directory only needs the working tree.
