@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>post-irminsul — GOOD extractor</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>post-irminsul</h1>
+        <p class="lede">
+          Extract characters, weapons and artifacts from a Genshin Impact
+          <code>.pcap</code>/<code>.pcapng</code> capture as
+          <a href="https://frzyc.github.io/genshin-optimizer/#/doc" rel="noreferrer">GOOD</a>
+          data. Everything runs locally in your browser; the capture is never uploaded.
+        </p>
+      </header>
+
+      <form id="decode-form">
+        <label id="drop-zone" class="drop-zone" for="capture">
+          <input id="capture" class="visually-hidden" type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap" />
+          <strong id="drop-title">Drop a capture here</strong>
+          <span id="drop-subtitle">or click to choose a .pcap / .pcapng file</span>
+        </label>
+
+        <fieldset>
+          <legend>Options</legend>
+          <label class="checkbox">
+            <input id="fake-4th-line" type="checkbox" />
+            Pretend unactivated fourth substats have already rolled
+          </label>
+        </fieldset>
+
+        <div class="actions">
+          <button id="decode-button" type="submit" disabled>Decode capture</button>
+          <button id="download-button" type="button" class="secondary" hidden>
+            Download GOOD JSON
+          </button>
+        </div>
+
+        <p id="status" role="status" aria-live="polite"></p>
+      </form>
+
+      <section id="result" hidden>
+        <h2>Result</h2>
+        <dl id="stats" class="stats"></dl>
+
+        <div id="warnings" hidden>
+          <h3>Warnings</h3>
+          <ul id="warning-list"></ul>
+        </div>
+
+        <details open>
+          <summary>GOOD document</summary>
+          <pre id="output"></pre>
+          <p id="preview-note" class="note" hidden></p>
+        </details>
+      </section>
+
+      <footer>
+        <p>
+          Captures must include the login handshake: start the capture before
+          launching the game. Only the JSON document is exported.
+        </p>
+      </footer>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -16,6 +16,7 @@
+ rsa = "0.9"
+ clap = { version = "4.5.47", features = ["derive"] }
+ anyhow = "1.0.99"
++web-time = "1"
+ 
+ [build-dependencies]
+ protobuf-codegen = "3.7.1"
+diff --git a/src/kcp.rs b/src/kcp.rs
+--- a/src/kcp.rs
++++ b/src/kcp.rs
+@@ -1,4 +1,4 @@
+-use std::time::SystemTime;
++use web_time::SystemTime;
+ 
+ use kcp::{get_conv, Kcp, KCP_OVERHEAD};
+ use tracing::{error, info, instrument, span, trace, warn, Level};

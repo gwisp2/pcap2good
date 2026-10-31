@@ -1,0 +1,5 @@
+/target
+/3rdparty
+/vendor
+/web/pkg
+.idea/

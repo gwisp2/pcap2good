@@ -1,0 +1,277 @@
+:root {
+  color-scheme: dark;
+  --bg: #14171c;
+  --panel: #1c2129;
+  --panel-raised: #232a34;
+  --text: #e7e9ee;
+  --muted: #9aa4b2;
+  --accent: #d3a75f;
+  --accent-strong: #f0c87a;
+  --border: #303845;
+  --error: #f28b82;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 50% -20%, #1d2633, var(--bg));
+  color: var(--text);
+  line-height: 1.5;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 3rem 1.25rem 4rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  margin: 2.5rem 0 1rem;
+}
+
+h3 {
+  margin: 1.5rem 0 0.5rem;
+  color: var(--accent-strong);
+}
+
+.lede {
+  margin: 0 0 2rem;
+  max-width: 65ch;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+a {
+  color: var(--accent-strong);
+}
+
+code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--panel);
+  font-size: 0.9em;
+}
+
+.drop-zone {
+  display: grid;
+  gap: 0.25rem;
+  place-items: center;
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.drop-zone:hover,
+.drop-zone.dragging {
+  border-color: var(--accent);
+  background: var(--panel-raised);
+}
+
+.drop-zone.busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.drop-zone strong {
+  font-size: 1.1rem;
+}
+
+.drop-zone span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+fieldset {
+  margin: 1.5rem 0 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+legend {
+  padding: 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.checkbox {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+button {
+  padding: 0.65rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #1a1205;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+button.secondary:hover {
+  border-color: var(--accent);
+  background: var(--panel-raised);
+}
+
+#status {
+  min-height: 1.5em;
+  margin: 1rem 0 0;
+  color: var(--muted);
+}
+
+#status.error {
+  color: var(--error);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.stats div {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.stats dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stats dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+#warnings ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.6rem;
+}
+
+#warnings li {
+  padding: 0.8rem 1rem;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+#warnings small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+}
+
+details {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+summary {
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  background: var(--panel-raised);
+}
+
+pre {
+  margin: 0;
+  padding: 1rem;
+  max-height: 55vh;
+  overflow: auto;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.note {
+  margin: 0;
+  padding: 0 1rem 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 560px) {
+  main {
+    padding-top: 2rem;
+  }
+
+  .actions button {
+    flex: 1 1 100%;
+  }
+}

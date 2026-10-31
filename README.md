@@ -1,0 +1,184 @@
+# post-irminsul
+
+Offline counterpart to [Irminsul](https://github.com/konkers/irminsul): instead of
+sniffing live game traffic, it reads a packet capture from disk and prints the
+player's characters, weapons and artifacts as [GOOD](https://frzyc.github.io/genshin-optimizer/#/doc)
+v3 data on stdout.
+
+```console
+$ postirminsul decode path/to/capture.pcap
+{
+  "format": "GOOD",
+  "version": 3,
+  "source": "post-irminsul",
+  "characters": [ ... ],
+  "artifacts": [ ... ],
+  "weapons": [ ... ],
+  "materials": { ... }
+}
+```
+
+Only the JSON document is written to stdout. Progress, warnings and errors go
+to stderr, so the output can be piped or redirected:
+
+```console
+$ postirminsul decode capture.pcap > good.json
+$ postirminsul decode capture.pcap | jq '.artifacts | length'
+```
+
+## Capturing
+
+The capture must contain the connection handshake with the game server, since
+the encryption key for the rest of the session is negotiated there. In practice
+that means starting the capture **before** launching Genshin Impact, or before
+logging in.
+
+Genshin communicates over **UDP ports 22101 and 22102**.
+
+```console
+# Linux
+$ sudo tcpdump -i any -w capture.pcap 'udp portrange 22101-22102'
+
+# Windows (Npcap must be installed)
+$ tshark -i "Ethernet" -f "udp portrange 22101-22102" -w capture.pcap
+```
+
+Captures taken with Wireshark's "any" interface or `tcpdump -i any` use the
+Linux "cooked" link type; that is supported, as are ordinary Ethernet captures,
+pcapng files, raw IP and BSD loopback captures.
+
+Decryption starts from a table of dispatch keys. Those keys live in
+[`keys/gi.json`](keys/gi.json) and are the same table Irminsul ships. If a
+capture cannot be decrypted (for example after the game rotates its keys),
+update that file from upstream Irminsul and rebuild.
+
+## Options
+
+| Option | Description |
+| --- | --- |
+| `--fake-initialize-4th-line` | Pretend unactivated fourth substats have already rolled |
+| `--compact` | Single-line JSON instead of indented JSON |
+| `--dump-commands <DIR>` | Write every decoded command to a directory as `<NNNN>-<id>.bin` and `<NNNN>-<id>.json` (for debugging) |
+| `-v`, `-vv`, `-vvv` | Info, debug and trace logging on stderr |
+
+Every character, artifact, weapon and material in the capture is exported.
+
+With `--dump-commands`, every command produces two files: the raw payload as
+`<NNNN>-<id>.bin` and a schema-less JSON rendering as `<NNNN>-<id>.json`.
+Because the game's protobuf schemas are not available to this tool, the JSON
+mirrors the wire format: object keys are field numbers, fields that occur more
+than once become arrays, and length-delimited fields are decoded as nested
+messages when possible, otherwise as text or base64. The header and body are
+decoded separately:
+
+```json
+{
+  "header": { "3": 1, "6": 1793150966255 },
+  "body": { "7": { "1": 10000061, "2": 100 } }
+}
+```
+
+If the capture does not contain any character or inventory packets, the command
+still prints a valid (empty) GOOD document and writes a warning to stderr. This
+usually means the capture started too late to see the handshake.
+
+## Known limitations
+
+The packet decoding is provided by [`auto-artifactarium`], the same library
+Irminsul uses, so every limitation of that library applies here.
+
+After the login exchange the game encrypts its traffic with a session key, which
+the sniffer derives from the login response. Some Genshin Impact 7.1 sessions get
+that response compressed with Oodle Network TCP, which the library does not
+decompress, so the session key is never derived and only the handful of login
+commands that use the dispatch key can be read. The CLI reports this as:
+
+```
+warning: the game compressed its login response (Oodle Network TCP), which this decoder cannot decompress
+         the session key could not be derived; re-capture the session (the login response is not always compressed)
+```
+
+The compression is not deterministic: in a working session the same login
+response arrives as a plain 25 576-byte protobuf body (25 585 bytes including
+its 9-byte header), while a failing session carries the same message compressed
+to 20 071 bytes with the decompressed size in header field 8. Re-capturing
+usually produces the uncompressed variant.
+
+This affects Irminsul itself as well; it is tracked upstream in
+[konkers/irminsul#160](https://github.com/konkers/irminsul/issues/160) and
+[konkers/irminsul#163](https://github.com/konkers/irminsul/issues/163). Nothing
+is wrong with the capture file when this happens — and captures whose login
+response is not compressed decode normally.
+
+[`auto-artifactarium`]: https://github.com/konkers/auto-artifactarium
+
+## Building
+
+Rust 1.88 or newer is required.
+
+The build needs two local dependencies; neither is committed:
+
+- [Dimbreath's AnimeGameData][anime-game-data] dump under
+  `3rdparty/AnimeGameData` (a symlink or junction to an existing checkout
+  works).
+- `auto-artifactarium`, downloaded and patched into `vendor/auto-artifactarium`
+  by the fetch script. The patch lives in
+  [`patches/auto-artifactarium-web-time.patch`](patches/auto-artifactarium-web-time.patch)
+  and fixes its clock for wasm.
+
+```console
+$ git clone --depth 1 https://gitlab.com/Dimbreath/animegamedata2 3rdparty/AnimeGameData
+$ ./scripts/fetch-auto-artifactarium.ps1   # or .sh on other platforms
+$ cargo build --release
+```
+
+The build reads names, artifact sets, affixes and related tables from the data
+directory and embeds them in the binary, so decoding itself works fully
+offline. Both directories are gitignored; update them and rebuild when the game
+data or `auto-artifactarium` changes. Use `-Force`/`--force` to re-fetch the
+latter after changing the patch.
+
+```console
+$ cargo test
+```
+
+[anime-game-data]: https://gitlab.com/Dimbreath/animegamedata2
+
+## Web wrapper
+
+A static browser front end lives in [`web/`](web). It runs the decoder in a Web
+Worker via WebAssembly, so the capture never leaves the machine and the page can
+be served from any static file host.
+
+```console
+# The CLI version must match the wasm-bindgen crate in Cargo.lock.
+$ cargo install wasm-bindgen-cli --version 0.2.129
+$ ./web/build.ps1
+$ python -m http.server 8000 -d web
+```
+
+Open <http://localhost:8000>. On other platforms the build is:
+
+```console
+$ ./scripts/fetch-auto-artifactarium.sh
+$ cargo build --release --target wasm32-unknown-unknown --lib
+$ wasm-bindgen target/wasm32-unknown-unknown/release/post_irminsul.wasm \
+      --target web --out-dir web/pkg --out-name post_irminsul
+```
+
+`web/pkg` is generated and gitignored. The page needs a real HTTP server (ES
+modules and `fetch` do not work from `file://`).
+
+## Differences from Irminsul
+
+- Reads a capture file instead of capturing live traffic; no admin/root rights
+  and no Npcap/pktmon dependency to decode.
+- Command line plus a static in-browser (WASM) front end; no live capture,
+  update checker, achievements or wish history.
+- Handles `.pcap` and `.pcapng` files with legacy pcap and pcapng sections.
+
+## License
+
+MIT. Much of the decoding and GOOD export logic is adapted from
+[Irminsul](https://github.com/konkers/irminsul), Copyright (c) 2025 Erik Gilling,
+which is also MIT licensed. See [LICENSE](LICENSE).
