@@ -195,3 +195,184 @@ function formatBytes(bytes) {
   }
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
+
+/* Manual viewer */
+
+const manualButton = document.querySelector("#manual-button");
+const manualDialog = document.querySelector("#manual-dialog");
+const manualClose = document.querySelector("#manual-close");
+const manualViewport = document.querySelector("#manual-viewport");
+const manualImage = document.querySelector("#manual-image");
+const manualLoading = document.querySelector("#manual-loading");
+const manualZoomLabel = document.querySelector("#manual-zoom");
+const manualZoomIn = document.querySelector("#manual-zoom-in");
+const manualZoomOut = document.querySelector("#manual-zoom-out");
+const manualFit = document.querySelector("#manual-fit");
+const manualActual = document.querySelector("#manual-actual");
+
+const MANUAL_MIN_ZOOM = 0.05;
+const MANUAL_MAX_ZOOM = 4;
+const MANUAL_ZOOM_STEP = 1.25;
+
+let manualLoaded = false;
+let manualZoom = 1;
+let manualNaturalWidth = 0;
+let manualNaturalHeight = 0;
+let manualDrag = null;
+
+manualButton.addEventListener("click", openManual);
+manualClose.addEventListener("click", closeManual);
+manualDialog.addEventListener("click", (event) => {
+  if (event.target === manualDialog) closeManual();
+});
+manualDialog.addEventListener("close", () => {
+  if (!manualDialog.open) {
+    document.body.classList.remove("manual-open");
+  }
+  manualDrag = null;
+  manualViewport.classList.remove("dragging");
+});
+manualDialog.addEventListener("keydown", onManualKeyDown);
+
+manualImage.addEventListener("load", () => {
+  manualLoaded = true;
+  manualNaturalWidth = manualImage.naturalWidth;
+  manualNaturalHeight = manualImage.naturalHeight;
+  manualLoading.hidden = true;
+  fitManual();
+});
+manualImage.addEventListener("error", () => {
+  manualLoading.textContent = "Could not load guide.png";
+});
+
+manualZoomIn.addEventListener("click", () => setManualZoom(manualZoom * MANUAL_ZOOM_STEP));
+manualZoomOut.addEventListener("click", () => setManualZoom(manualZoom / MANUAL_ZOOM_STEP));
+manualFit.addEventListener("click", fitManual);
+manualActual.addEventListener("click", () => setManualZoom(1));
+
+manualViewport.addEventListener("wheel", onManualWheel, { passive: false });
+manualViewport.addEventListener("pointerdown", onManualPointerDown);
+manualViewport.addEventListener("pointermove", onManualPointerMove);
+manualViewport.addEventListener("pointerup", endManualDrag);
+manualViewport.addEventListener("pointercancel", endManualDrag);
+
+function openManual() {
+  if (!manualImage.getAttribute("src")) {
+    manualImage.src = "./guide.png";
+  }
+
+  document.body.classList.add("manual-open");
+  manualDialog.showModal();
+
+  if (manualLoaded) {
+    fitManual();
+  }
+}
+
+function closeManual() {
+  manualDialog.close();
+  document.body.classList.remove("manual-open");
+  manualDrag = null;
+  manualViewport.classList.remove("dragging");
+}
+
+function setManualZoom(next, anchor = null) {
+  if (!manualLoaded) return;
+
+  const clamped = Math.min(MANUAL_MAX_ZOOM, Math.max(MANUAL_MIN_ZOOM, next));
+  if (Math.abs(clamped - manualZoom) < 0.0001) return;
+
+  const viewportRect = manualViewport.getBoundingClientRect();
+  const point = anchor ?? {
+    x: viewportRect.left + manualViewport.clientWidth / 2,
+    y: viewportRect.top + manualViewport.clientHeight / 2,
+  };
+
+  const before = manualImage.getBoundingClientRect();
+  const imageX = (point.x - before.left) / manualZoom;
+  const imageY = (point.y - before.top) / manualZoom;
+
+  manualZoom = clamped;
+  manualImage.style.width = `${manualNaturalWidth * manualZoom}px`;
+  manualImage.style.height = `${manualNaturalHeight * manualZoom}px`;
+  manualZoomLabel.textContent = `${Math.round(manualZoom * 100)}%`;
+
+  const after = manualImage.getBoundingClientRect();
+  manualViewport.scrollLeft += point.x - (after.left + imageX * manualZoom);
+  manualViewport.scrollTop += point.y - (after.top + imageY * manualZoom);
+}
+
+function fitManual() {
+  if (!manualLoaded) return;
+
+  const width = manualViewport.clientWidth - 48;
+  const height = manualViewport.clientHeight - 48;
+  if (width <= 0 || height <= 0) return;
+
+  const scale = Math.min(width / manualNaturalWidth, height / manualNaturalHeight);
+  setManualZoom(Math.min(1, scale));
+  manualViewport.scrollTo({ top: 0, left: 0 });
+}
+
+function onManualWheel(event) {
+  if (!manualLoaded || (!event.ctrlKey && !event.metaKey)) return;
+
+  event.preventDefault();
+  const factor = Math.exp(-event.deltaY * 0.0015);
+  setManualZoom(manualZoom * factor, { x: event.clientX, y: event.clientY });
+}
+
+function onManualKeyDown(event) {
+  switch (event.key) {
+    case "+":
+    case "=":
+      event.preventDefault();
+      setManualZoom(manualZoom * MANUAL_ZOOM_STEP);
+      break;
+    case "-":
+    case "_":
+      event.preventDefault();
+      setManualZoom(manualZoom / MANUAL_ZOOM_STEP);
+      break;
+    case "0":
+      event.preventDefault();
+      fitManual();
+      break;
+    case "1":
+      event.preventDefault();
+      setManualZoom(1);
+      break;
+  }
+}
+
+function onManualPointerDown(event) {
+  if (!manualLoaded || event.pointerType !== "mouse" || event.button !== 0) return;
+  if (!event.target.closest(".manual-canvas")) return;
+
+  manualDrag = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    left: manualViewport.scrollLeft,
+    top: manualViewport.scrollTop,
+  };
+
+  manualViewport.setPointerCapture(event.pointerId);
+  manualViewport.classList.add("dragging");
+  event.preventDefault();
+}
+
+function onManualPointerMove(event) {
+  if (!manualDrag || event.pointerId !== manualDrag.pointerId) return;
+
+  manualViewport.scrollLeft = manualDrag.left - (event.clientX - manualDrag.x);
+  manualViewport.scrollTop = manualDrag.top - (event.clientY - manualDrag.y);
+}
+
+function endManualDrag(event) {
+  if (!manualDrag) return;
+  if (event.pointerId !== undefined && event.pointerId !== manualDrag.pointerId) return;
+
+  manualDrag = null;
+  manualViewport.classList.remove("dragging");
+}

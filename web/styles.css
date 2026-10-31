@@ -266,6 +266,147 @@ footer {
   font-size: 0.9rem;
 }
 
+.manual-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.9rem;
+}
+
+.manual-button {
+  padding: 0.55rem 1.15rem;
+  border: 1px solid rgb(211 167 95 / 55%);
+  border-radius: 999px;
+  background: rgb(211 167 95 / 14%);
+  color: var(--accent-strong);
+  font-size: 0.95rem;
+}
+
+.manual-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #1a1205;
+}
+
+.manual-button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+#manual-dialog {
+  width: min(96vw, 1800px);
+  height: min(92vh, 1200px);
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  overflow: hidden;
+}
+
+#manual-dialog::backdrop {
+  background: rgb(4 6 10 / 80%);
+  backdrop-filter: blur(3px);
+}
+
+.manual-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.manual-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-raised);
+}
+
+.manual-toolbar strong {
+  margin-right: auto;
+  font-size: 0.95rem;
+}
+
+.manual-toolbar button {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.manual-toolbar .icon-button {
+  min-width: 2.1rem;
+  padding: 0.35rem 0.45rem;
+  line-height: 1;
+}
+
+.manual-zoom-label {
+  min-width: 3.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.manual-viewport {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: #0b0e13;
+  cursor: grab;
+  overscroll-behavior: contain;
+}
+
+.manual-viewport.dragging {
+  cursor: grabbing;
+}
+
+.manual-canvas {
+  display: inline-block;
+  margin: auto;
+  padding: 24px;
+}
+
+#manual-image {
+  display: block;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.manual-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: rgb(11 14 19 / 85%);
+  pointer-events: none;
+}
+
+.manual-loading[hidden] {
+  display: none;
+}
+
+.manual-hint {
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+body.manual-open {
+  overflow: hidden;
+}
+
 @media (max-width: 560px) {
   main {
     padding-top: 2rem;
@@ -273,5 +414,13 @@ footer {
 
   .actions button {
     flex: 1 1 100%;
+  }
+
+  #manual-dialog {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
   }
 }

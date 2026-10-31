@@ -25,6 +25,12 @@
           <span id="drop-subtitle">or click to choose a .pcap / .pcapng file</span>
         </label>
 
+        <div class="manual-row">
+          <button id="manual-button" class="manual-button" type="button">
+            How to make a capture?
+          </button>
+        </div>
+
         <fieldset>
           <legend>Options</legend>
           <label class="checkbox">
@@ -66,6 +72,29 @@
         </p>
       </footer>
     </main>
+
+    <dialog id="manual-dialog" aria-labelledby="manual-title">
+      <div class="manual-shell">
+        <div class="manual-toolbar">
+          <strong id="manual-title">How to make a capture?</strong>
+          <button id="manual-zoom-out" class="icon-button secondary" type="button" aria-label="Zoom out">−</button>
+          <span id="manual-zoom" class="manual-zoom-label" aria-live="polite">100%</span>
+          <button id="manual-zoom-in" class="icon-button secondary" type="button" aria-label="Zoom in">+</button>
+          <button id="manual-fit" class="small-button secondary" type="button">Fit</button>
+          <button id="manual-actual" class="small-button secondary" type="button">1:1</button>
+          <button id="manual-close" class="icon-button secondary" type="button" aria-label="Close guide">✕</button>
+        </div>
+
+        <div id="manual-viewport" class="manual-viewport">
+          <div class="manual-canvas">
+            <img id="manual-image" alt="post-irminsul usage guide" draggable="false" />
+          </div>
+          <div id="manual-loading" class="manual-loading" role="status">Loading guide…</div>
+        </div>
+
+        <p class="manual-hint">Drag to pan · Ctrl/⌘ + wheel to zoom · Esc to close</p>
+      </div>
+    </dialog>
 
     <script type="module" src="./app.js"></script>
   </body>
