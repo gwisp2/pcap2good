@@ -14,8 +14,8 @@ use protobuf::Message;
 const ETHERNET_HEADER_LEN: usize = 14;
 const ETHERTYPE_IPV4: u16 = 0x0800;
 
-const PLAYER_STORE_NOTIFY: u16 = 22160;
-const AVATAR_DATA_NOTIFY: u16 = 27799;
+const PLAYER_STORE_NOTIFY: u16 = 20892;
+const AVATAR_DATA_NOTIFY: u16 = 20143;
 const PLAYER_PROP_NOTIFY: u16 = 130;
 
 const ARTIFACT_ITEM_ID: u32 = 31534; // Marechaussee Hunter circlet, 5 stars.
@@ -78,6 +78,10 @@ fn kcp_segment(sequence: u32, content: &[u8]) -> Vec<u8> {
 }
 
 fn udp_packet(payload: &[u8]) -> Vec<u8> {
+    udp_packet_for_client(40000, payload)
+}
+
+fn udp_packet_for_client(client_port: u16, payload: &[u8]) -> Vec<u8> {
     let udp_len = 8 + payload.len();
     let total_len = 20 + udp_len;
 
@@ -88,7 +92,7 @@ fn udp_packet(payload: &[u8]) -> Vec<u8> {
     packet.extend_from_slice(&[10, 0, 0, 2]); // server
     packet.extend_from_slice(&[10, 0, 0, 1]); // client
     packet.extend_from_slice(&22101u16.to_be_bytes());
-    packet.extend_from_slice(&40000u16.to_be_bytes());
+    packet.extend_from_slice(&client_port.to_be_bytes());
     packet.extend_from_slice(&(udp_len as u16).to_be_bytes());
     packet.extend_from_slice(&[0, 0]);
     packet.extend_from_slice(payload);
@@ -103,6 +107,10 @@ fn ethernet_frame(payload: &[u8]) -> Vec<u8> {
 }
 
 fn write_pcap(path: &Path, frames: &[Vec<u8>]) {
+    fs::write(path, pcap_bytes(frames)).unwrap();
+}
+
+fn pcap_bytes(frames: &[Vec<u8>]) -> Vec<u8> {
     let mut file = Vec::new();
     file.extend_from_slice(&0xa1b2_c3d4u32.to_le_bytes());
     file.extend_from_slice(&2u16.to_le_bytes());
@@ -120,7 +128,7 @@ fn write_pcap(path: &Path, frames: &[Vec<u8>]) {
         file.extend_from_slice(frame);
     }
 
-    fs::write(path, file).unwrap();
+    file
 }
 
 fn prop(value: i64) -> PropValue {
@@ -131,11 +139,15 @@ fn prop(value: i64) -> PropValue {
 }
 
 fn character_message() -> Vec<u8> {
+    character_message_with(90)
+}
+
+fn character_message_with(level: i64) -> Vec<u8> {
     let mut avatar = AvatarInfo::new();
     avatar.avatar_id = CHARACTER_ID;
     avatar.guid = 100;
     avatar.avatar_type = 1;
-    avatar.prop_map.insert(4001, prop(90)); // level
+    avatar.prop_map.insert(4001, prop(level)); // level
     avatar.prop_map.insert(1002, prop(6)); // ascension
     avatar.talent_id_list.extend_from_slice(&[0, 1, 2]); // constellation 3
     avatar.skill_level_map.insert(10024, 10); // normal attack
@@ -249,6 +261,20 @@ fn capture_with_game_data() -> Vec<Vec<u8>> {
         .enumerate()
         .map(|(i, command)| ethernet_frame(&udp_packet(&kcp_segment(i as u32, command))))
         .collect()
+}
+
+fn handshake_frame(client_port: u16) -> Vec<u8> {
+    ethernet_frame(&udp_packet_for_client(client_port, &[0, 0, 0, 0xff]))
+}
+
+fn avatar_frame(client_port: u16, sequence: u32, level: i64) -> Vec<u8> {
+    ethernet_frame(&udp_packet_for_client(
+        client_port,
+        &kcp_segment(
+            sequence,
+            &game_command(AVATAR_DATA_NOTIFY, character_message_with(level)),
+        ),
+    ))
 }
 
 fn run_cli(path: &Path, extra_args: &[&str]) -> Output {
@@ -425,8 +451,8 @@ fn dumps_commands_as_bin_and_json() {
     // Commands built by the tests carry an empty PacketHead.
     assert_eq!(decoded["header"], serde_json::json!({}));
 
-    // AvatarDataNotify.avatar_list is field 7 and holds one AvatarInfo.
-    let avatar = &decoded["body"]["7"];
+    // AvatarDataNotify.avatar_list is field 6 and holds one AvatarInfo.
+    let avatar = &decoded["body"]["6"];
     assert!(avatar.is_object(), "avatar is not an object: {avatar:?}");
     assert!(
         avatar
@@ -552,4 +578,85 @@ fn empty_file_is_an_error() {
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("is empty"), "{stderr}");
+}
+
+#[test]
+fn multiple_flows_are_decoded_independently() {
+    let frames = vec![
+        handshake_frame(40000),
+        handshake_frame(40001),
+        avatar_frame(40000, 0, 90),
+        avatar_frame(40001, 0, 80),
+    ];
+
+    let outcome =
+        post_irminsul::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows.len(), 2);
+    assert_eq!(outcome.selected_flow, Some(outcome.flows[0].id));
+    assert_eq!(outcome.good.characters.len(), 1);
+    assert_eq!(outcome.good.characters[0].level, 90);
+    assert_eq!(outcome.flows[1].good.characters.len(), 1);
+    assert_eq!(outcome.flows[1].good.characters[0].level, 80);
+    assert!(outcome.warnings.iter().any(|warning| matches!(
+        warning.code,
+        post_irminsul::WarningCode::MultipleFlows { count: 2 }
+    )));
+}
+
+#[test]
+fn reconnecting_on_the_same_flow_key_starts_a_new_session() {
+    let frames = vec![
+        handshake_frame(40000),
+        avatar_frame(40000, 0, 90),
+        handshake_frame(40000),
+        avatar_frame(40000, 0, 80),
+    ];
+
+    let outcome =
+        post_irminsul::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows.len(), 2);
+    assert_eq!(outcome.flows[0].good.characters[0].level, 90);
+    assert_eq!(outcome.flows[1].good.characters[0].level, 80);
+    assert_eq!(outcome.good.characters[0].level, 90);
+}
+
+#[test]
+fn selects_the_first_flow_with_player_data() {
+    let frames = vec![
+        handshake_frame(40000),
+        handshake_frame(40001),
+        avatar_frame(40001, 0, 80),
+    ];
+
+    let outcome =
+        post_irminsul::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows.len(), 2);
+    assert_eq!(outcome.selected_flow, Some(outcome.flows[1].id));
+    assert_eq!(outcome.good.characters.len(), 1);
+    assert_eq!(outcome.good.characters[0].level, 80);
+}
+
+#[test]
+fn handshake_on_one_flow_does_not_reset_another_flow() {
+    let frames = vec![
+        handshake_frame(40000),
+        avatar_frame(40000, 0, 90),
+        handshake_frame(40001),
+        avatar_frame(40000, 1, 80),
+    ];
+
+    let outcome =
+        post_irminsul::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows.len(), 2);
+    assert_eq!(outcome.flows[0].stats.commands, 2);
+    assert_eq!(outcome.flows[0].good.characters[0].level, 80);
+    assert_eq!(outcome.flows[1].stats.commands, 0);
 }

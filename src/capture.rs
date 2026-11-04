@@ -1,36 +1,19 @@
-//! Reads packet captures from disk and feeds the game packets to the decoder.
+//! Reads packet captures from disk and emits raw link-layer frames.
 //!
-//! Both the legacy pcap format and pcapng are supported. Captures can use any
-//! of the link types that are commonly produced by tcpdump, Wireshark and
-//! Npcap; frames are normalized to Ethernet before being handed to
-//! [`crate::auto_artifactarium`], which expects an Ethernet header.
+//! Both the legacy pcap format and pcapng are supported. Link-layer
+//! normalization and game-port filtering happen in [`crate::pipeline`].
 
 use std::fs::File;
 use std::io::{Cursor, Read};
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use etherparse::{SlicedPacket, TransportSlice};
 use pcap_parser::pcapng::Block;
 use pcap_parser::traits::PcapNGPacketBlock;
 use pcap_parser::{PcapBlockOwned, PcapError, create_reader};
 use serde::Serialize;
 
-/// The game uses these ports for its KCP connection.
-pub const PORT_RANGE: (u16, u16) = (22101, 22102);
-
-const LINKTYPE_NULL: i32 = 0;
-const LINKTYPE_ETHERNET: i32 = 1;
-const LINKTYPE_RAW: i32 = 101;
-const LINKTYPE_LOOP: i32 = 108;
-const LINKTYPE_LINUX_SLL: i32 = 113;
-const LINKTYPE_IPV4: i32 = 228;
-const LINKTYPE_IPV6: i32 = 229;
-const LINKTYPE_LINUX_SLL2: i32 = 276;
-
-const ETHERNET_HEADER_LEN: usize = 14;
-const ETHERTYPE_IPV4: u16 = 0x0800;
-const ETHERTYPE_IPV6: u16 = 0x86dd;
+use crate::pipeline::{CapturedFrame, LinkType, Timestamp};
 
 const INPUT_BUFFER_SIZE: usize = 1 << 20;
 
@@ -47,11 +30,10 @@ pub struct CaptureStats {
     pub truncated: bool,
 }
 
-/// Reads a capture file and calls `on_frame` with an Ethernet frame for each
-/// game packet.
+/// Reads a capture file and calls `on_frame` with each captured frame.
 pub fn read_capture_file<F>(path: &Path, on_frame: F) -> Result<CaptureStats>
 where
-    F: FnMut(Vec<u8>),
+    F: FnMut(CapturedFrame),
 {
     let file = File::open(path)
         .with_context(|| format!("Failed to open capture file {}", path.display()))?;
@@ -64,11 +46,10 @@ where
         .with_context(|| format!("Failed to read capture file {}", path.display()))
 }
 
-/// Reads a capture from memory and calls `on_frame` with an Ethernet frame for
-/// each game packet.
+/// Reads a capture from memory and calls `on_frame` with each captured frame.
 pub fn read_capture_bytes<F>(bytes: &[u8], on_frame: F) -> Result<CaptureStats>
 where
-    F: FnMut(Vec<u8>),
+    F: FnMut(CapturedFrame),
 {
     if bytes.is_empty() {
         bail!("The capture is empty");
@@ -77,25 +58,48 @@ where
     read_capture(Cursor::new(bytes), on_frame).context("Failed to read the capture")
 }
 
-/// Reads every game packet from `reader` and calls `on_frame` with an Ethernet
-/// frame for each one.
+struct InterfaceInfo {
+    link_type: i32,
+    ts_resolution: u64,
+    ts_offset: i64,
+}
+
+impl Default for InterfaceInfo {
+    fn default() -> Self {
+        Self {
+            link_type: 1,
+            ts_resolution: 1_000_000,
+            ts_offset: 0,
+        }
+    }
+}
+
+/// Reads every packet from `reader` and calls `on_frame` for each one.
 fn read_capture<R, F>(reader: R, mut on_frame: F) -> Result<CaptureStats>
 where
     R: Read + Send,
-    F: FnMut(Vec<u8>),
+    F: FnMut(CapturedFrame),
 {
     let mut reader = create_reader(INPUT_BUFFER_SIZE, reader)
         .context("Failed to initialise the capture reader")?;
 
     let mut stats = CaptureStats::default();
-    // Link type of each interface in the current section, indexed by
-    // interface id. Legacy pcap files only ever have interface 0.
-    let mut interfaces: Vec<i32> = Vec::new();
+    // Link type and timestamp parameters of each interface in the current
+    // section, indexed by interface id. Legacy pcap files only ever have
+    // interface 0.
+    let mut interfaces: Vec<InterfaceInfo> = Vec::new();
+    let mut last_timestamp = Timestamp::default();
 
     loop {
         match reader.next() {
             Ok((offset, block)) => {
-                handle_block(&block, &mut interfaces, &mut stats, &mut on_frame);
+                handle_block(
+                    &block,
+                    &mut interfaces,
+                    &mut stats,
+                    &mut last_timestamp,
+                    &mut on_frame,
+                );
                 reader.consume(offset);
             }
             Err(PcapError::Eof) => break,
@@ -131,151 +135,104 @@ where
 
 fn handle_block<F>(
     block: &PcapBlockOwned<'_>,
-    interfaces: &mut Vec<i32>,
+    interfaces: &mut Vec<InterfaceInfo>,
     stats: &mut CaptureStats,
+    last_timestamp: &mut Timestamp,
     on_frame: &mut F,
 ) where
-    F: FnMut(Vec<u8>),
+    F: FnMut(CapturedFrame),
 {
     match block {
         PcapBlockOwned::LegacyHeader(header) => {
             interfaces.clear();
-            interfaces.push(header.network.0);
+            interfaces.push(InterfaceInfo {
+                link_type: header.network.0,
+                ts_resolution: 1_000_000,
+                ts_offset: 0,
+            });
         }
         PcapBlockOwned::Legacy(block) => {
-            let linktype = interfaces.first().copied().unwrap_or(LINKTYPE_ETHERNET);
-            handle_packet(linktype, block.data, stats, on_frame);
+            let interface = interfaces.first().copied().unwrap_or_default();
+            let timestamp = Timestamp::from_parts(u64::from(block.ts_sec), block.ts_usec);
+            handle_packet(
+                interface.link_type,
+                timestamp,
+                block.data,
+                stats,
+                last_timestamp,
+                on_frame,
+            );
         }
         PcapBlockOwned::NG(Block::SectionHeader(_)) => interfaces.clear(),
         PcapBlockOwned::NG(Block::InterfaceDescription(interface)) => {
-            interfaces.push(interface.linktype.0)
+            interfaces.push(InterfaceInfo {
+                link_type: interface.linktype.0,
+                ts_resolution: interface.ts_resolution().unwrap_or(1_000_000),
+                ts_offset: interface.ts_offset(),
+            });
         }
         PcapBlockOwned::NG(Block::EnhancedPacket(packet)) => {
-            let linktype = interfaces
+            let interface = interfaces
                 .get(packet.if_id as usize)
                 .copied()
-                .unwrap_or(LINKTYPE_ETHERNET);
-            handle_packet(linktype, packet.packet_data(), stats, on_frame);
+                .unwrap_or_default();
+            let (seconds, fraction) =
+                packet.decode_ts(interface.ts_offset.max(0) as u64, interface.ts_resolution);
+            let timestamp = Timestamp::from_resolution(
+                u64::from(seconds),
+                u64::from(fraction),
+                interface.ts_resolution,
+            );
+            handle_packet(
+                interface.link_type,
+                timestamp,
+                packet.packet_data(),
+                stats,
+                last_timestamp,
+                on_frame,
+            );
         }
         PcapBlockOwned::NG(Block::SimplePacket(packet)) => {
-            let linktype = interfaces.first().copied().unwrap_or(LINKTYPE_ETHERNET);
-            handle_packet(linktype, packet.packet_data(), stats, on_frame);
+            let interface = interfaces.first().copied().unwrap_or_default();
+            handle_packet(
+                interface.link_type,
+                *last_timestamp,
+                packet.packet_data(),
+                stats,
+                last_timestamp,
+                on_frame,
+            );
         }
         PcapBlockOwned::NG(_) => {}
     }
 }
 
-fn handle_packet<F>(linktype: i32, data: &[u8], stats: &mut CaptureStats, on_frame: &mut F)
-where
-    F: FnMut(Vec<u8>),
+fn handle_packet<F>(
+    link_type: i32,
+    timestamp: Timestamp,
+    data: &[u8],
+    stats: &mut CaptureStats,
+    last_timestamp: &mut Timestamp,
+    on_frame: &mut F,
+) where
+    F: FnMut(CapturedFrame),
 {
     stats.packets += 1;
-
-    let Some(frame) = to_ethernet(linktype, data) else {
-        stats.unsupported_packets += 1;
-        tracing::trace!("Skipping packet with unsupported link type {linktype}");
-        return;
-    };
-
-    if !is_game_packet(&frame) {
-        return;
-    }
-
-    stats.game_packets += 1;
-    on_frame(frame);
+    *last_timestamp = timestamp;
+    on_frame(CapturedFrame {
+        timestamp,
+        link_type: LinkType(link_type),
+        data: data.to_vec(),
+    });
 }
 
-/// Returns true if the frame carries UDP traffic on the game's port range.
-///
-/// Packets with a very short payload are rejected as well: the game sniffer
-/// assumes at least one byte is present in the payload.
-fn is_game_packet(frame: &[u8]) -> bool {
-    let Ok(sliced) = SlicedPacket::from_ethernet(frame) else {
-        return false;
-    };
-    let Some(TransportSlice::Udp(udp)) = sliced.transport else {
-        return false;
-    };
-
-    let (low, high) = PORT_RANGE;
-    let on_game_port =
-        (low..=high).contains(&udp.source_port()) || (low..=high).contains(&udp.destination_port());
-
-    on_game_port && udp.payload().len() >= 4
-}
-
-/// Converts a captured frame to an Ethernet frame.
-///
-/// Returns `None` if the link type is not supported or if the frame is too
-/// short to contain the link layer header.
-fn to_ethernet(linktype: i32, data: &[u8]) -> Option<Vec<u8>> {
-    match linktype {
-        LINKTYPE_ETHERNET => Some(data.to_vec()),
-
-        LINKTYPE_RAW | LINKTYPE_IPV4 | LINKTYPE_IPV6 => {
-            let ethertype = ip_ethertype(data)?;
-            Some(with_ethernet_header(ethertype, data))
-        }
-
-        LINKTYPE_LINUX_SLL => {
-            // 2 bytes packet type, 2 bytes ARPHRD, 2 bytes address length,
-            // 8 bytes address, 2 bytes protocol.
-            let (protocol, payload) = data.split_at_checked(16)?;
-            let protocol = u16::from_be_bytes([protocol[14], protocol[15]]);
-            Some(with_ethernet_header(protocol, payload))
-        }
-
-        LINKTYPE_LINUX_SLL2 => {
-            // 2 bytes protocol, 2 bytes reserved, 4 bytes interface index,
-            // 2 bytes ARPHRD, 1 byte packet type, 1 byte address length,
-            // 8 bytes address.
-            let (header, payload) = data.split_at_checked(20)?;
-            let protocol = u16::from_be_bytes([header[0], header[1]]);
-            Some(with_ethernet_header(protocol, payload))
-        }
-
-        // BSD loopback: the first four bytes are the address family. pcap
-        // stores it in the host byte order of the capturing machine, so try
-        // both byte orders.
-        LINKTYPE_NULL | LINKTYPE_LOOP => {
-            let (header, payload) = data.split_at_checked(4)?;
-            let le = u32::from_le_bytes(header.try_into().expect("four bytes"));
-            let be = u32::from_be_bytes(header.try_into().expect("four bytes"));
-            let family = if is_ip_family(le) { le } else { be };
-            let ethertype = match family {
-                2 => ETHERTYPE_IPV4,
-                24 | 28 | 30 => ETHERTYPE_IPV6,
-                _ => return None,
-            };
-            Some(with_ethernet_header(ethertype, payload))
-        }
-
-        _ => None,
+impl Clone for InterfaceInfo {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
-fn is_ip_family(family: u32) -> bool {
-    matches!(family, 2 | 24 | 28 | 30)
-}
-
-/// Returns the Ethernet type of a raw IP packet.
-fn ip_ethertype(data: &[u8]) -> Option<u16> {
-    match data.first().map(|byte| byte >> 4)? {
-        4 => Some(ETHERTYPE_IPV4),
-        6 => Some(ETHERTYPE_IPV6),
-        _ => None,
-    }
-}
-
-fn with_ethernet_header(ethertype: u16, payload: &[u8]) -> Vec<u8> {
-    let mut frame = Vec::with_capacity(ETHERNET_HEADER_LEN + payload.len());
-    // The game sniffer only inspects the EtherType, so dummy MAC addresses are
-    // sufficient.
-    frame.extend_from_slice(&[0; 12]);
-    frame.extend_from_slice(&ethertype.to_be_bytes());
-    frame.extend_from_slice(payload);
-    frame
-}
+impl Copy for InterfaceInfo {}
 
 #[cfg(test)]
 mod tests {
@@ -302,7 +259,10 @@ mod tests {
     }
 
     fn ethernet_frame(ethertype: u16, payload: &[u8]) -> Vec<u8> {
-        with_ethernet_header(ethertype, payload)
+        let mut frame = vec![0; 12];
+        frame.extend_from_slice(&ethertype.to_be_bytes());
+        frame.extend_from_slice(payload);
+        frame
     }
 
     fn legacy_pcap(linktype: i32, packets: &[Vec<u8>]) -> Vec<u8> {
@@ -376,13 +336,13 @@ mod tests {
         path
     }
 
-    fn collect(path: &Path) -> (CaptureStats, Vec<Vec<u8>>) {
+    fn collect(path: &Path) -> (CaptureStats, Vec<CapturedFrame>) {
         let mut frames = Vec::new();
         let stats = read_capture_file(path, |frame| frames.push(frame)).unwrap();
         (stats, frames)
     }
 
-    fn collect_bytes(contents: &[u8]) -> (CaptureStats, Vec<Vec<u8>>) {
+    fn collect_bytes(contents: &[u8]) -> (CaptureStats, Vec<CapturedFrame>) {
         let mut frames = Vec::new();
         let stats = read_capture_bytes(contents, |frame| frames.push(frame)).unwrap();
         (stats, frames)
@@ -390,14 +350,15 @@ mod tests {
 
     #[test]
     fn reads_a_capture_from_memory() {
-        let packet = ethernet_frame(ETHERTYPE_IPV4, &ipv4_udp_packet(b"hello"));
-        let contents = legacy_pcap(LINKTYPE_ETHERNET, std::slice::from_ref(&packet));
+        let packet = ethernet_frame(0x0800, &ipv4_udp_packet(b"hello"));
+        let contents = legacy_pcap(1, std::slice::from_ref(&packet));
 
         let (stats, frames) = collect_bytes(&contents);
 
         assert_eq!(stats.packets, 1);
-        assert_eq!(stats.game_packets, 1);
-        assert_eq!(frames, vec![packet]);
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].data, packet);
+        assert_eq!(frames[0].link_type, LinkType(1));
     }
 
     #[test]
@@ -407,136 +368,49 @@ mod tests {
 
     #[test]
     fn reads_legacy_pcap_with_ethernet_link_type() {
-        let packet = ethernet_frame(ETHERTYPE_IPV4, &ipv4_udp_packet(b"hello"));
+        let packet = ethernet_frame(0x0800, &ipv4_udp_packet(b"hello"));
         let path = temp_file(
             "legacy.pcap",
-            &legacy_pcap(LINKTYPE_ETHERNET, std::slice::from_ref(&packet)),
+            &legacy_pcap(1, std::slice::from_ref(&packet)),
         );
 
         let (stats, frames) = collect(&path);
         fs::remove_file(path).ok();
 
         assert_eq!(stats.packets, 1);
-        assert_eq!(stats.game_packets, 1);
-        assert_eq!(frames, vec![packet]);
+        assert_eq!(frames[0].data, packet);
     }
 
     #[test]
     fn reads_pcapng_with_ethernet_link_type() {
-        let packet = ethernet_frame(ETHERTYPE_IPV4, &ipv4_udp_packet(b"hello"));
-        let path = temp_file(
-            "legacy.pcapng",
-            &pcapng(LINKTYPE_ETHERNET, std::slice::from_ref(&packet)),
-        );
+        let packet = ethernet_frame(0x0800, &ipv4_udp_packet(b"hello"));
+        let path = temp_file("legacy.pcapng", &pcapng(1, std::slice::from_ref(&packet)));
 
         let (stats, frames) = collect(&path);
         fs::remove_file(path).ok();
 
         assert_eq!(stats.packets, 1);
-        assert_eq!(stats.game_packets, 1);
-        assert_eq!(frames, vec![packet]);
+        assert_eq!(frames[0].data, packet);
     }
 
     #[test]
-    fn ignores_traffic_on_other_ports() {
+    fn emits_traffic_on_other_ports() {
         let mut packet = ipv4_udp_packet(b"hello");
         packet[20..22].copy_from_slice(&443u16.to_be_bytes());
-        let frame = ethernet_frame(ETHERTYPE_IPV4, &packet);
-        let path = temp_file("other-port.pcap", &legacy_pcap(LINKTYPE_ETHERNET, &[frame]));
+        let frame = ethernet_frame(0x0800, &packet);
+        let path = temp_file("other-port.pcap", &legacy_pcap(1, &[frame]));
 
         let (stats, frames) = collect(&path);
         fs::remove_file(path).ok();
 
         assert_eq!(stats.packets, 1);
-        assert_eq!(stats.game_packets, 0);
-        assert!(frames.is_empty());
-    }
-
-    #[test]
-    fn normalizes_raw_ip_link_type() {
-        let packet = ipv4_udp_packet(b"hello");
-        let path = temp_file(
-            "raw.pcap",
-            &legacy_pcap(LINKTYPE_RAW, std::slice::from_ref(&packet)),
-        );
-
-        let (stats, frames) = collect(&path);
-        fs::remove_file(path).ok();
-
-        assert_eq!(stats.game_packets, 1);
-        assert_eq!(frames, vec![ethernet_frame(ETHERTYPE_IPV4, &packet)]);
-    }
-
-    #[test]
-    fn normalizes_linux_cooked_link_type() {
-        let packet = ipv4_udp_packet(b"hello");
-        let mut cooked = vec![0, 0, 0, 1, 0, 6];
-        cooked.extend_from_slice(&[1, 2, 3, 4, 5, 6, 0, 0]);
-        cooked.extend_from_slice(&ETHERTYPE_IPV4.to_be_bytes());
-        cooked.extend_from_slice(&packet);
-
-        let path = temp_file("sll.pcap", &legacy_pcap(LINKTYPE_LINUX_SLL, &[cooked]));
-
-        let (stats, frames) = collect(&path);
-        fs::remove_file(path).ok();
-
-        assert_eq!(stats.game_packets, 1);
-        assert_eq!(frames, vec![ethernet_frame(ETHERTYPE_IPV4, &packet)]);
-    }
-
-    #[test]
-    fn normalizes_linux_cooked_v2_link_type() {
-        let packet = ipv4_udp_packet(b"hello");
-        let mut cooked = Vec::new();
-        cooked.extend_from_slice(&ETHERTYPE_IPV4.to_be_bytes());
-        cooked.extend_from_slice(&[0, 0]);
-        cooked.extend_from_slice(&1u32.to_be_bytes());
-        cooked.extend_from_slice(&1u16.to_be_bytes());
-        cooked.push(0);
-        cooked.push(6);
-        cooked.extend_from_slice(&[1, 2, 3, 4, 5, 6, 0, 0]);
-        cooked.extend_from_slice(&packet);
-
-        let path = temp_file("sll2.pcap", &legacy_pcap(LINKTYPE_LINUX_SLL2, &[cooked]));
-
-        let (stats, frames) = collect(&path);
-        fs::remove_file(path).ok();
-
-        assert_eq!(stats.game_packets, 1);
-        assert_eq!(frames, vec![ethernet_frame(ETHERTYPE_IPV4, &packet)]);
-    }
-
-    #[test]
-    fn short_udp_payloads_are_ignored() {
-        let frame = ethernet_frame(ETHERTYPE_IPV4, &ipv4_udp_packet(b"a"));
-        let path = temp_file("short.pcap", &legacy_pcap(LINKTYPE_ETHERNET, &[frame]));
-
-        let (stats, frames) = collect(&path);
-        fs::remove_file(path).ok();
-
-        assert_eq!(stats.packets, 1);
-        assert_eq!(stats.game_packets, 0);
-        assert!(frames.is_empty());
-    }
-
-    #[test]
-    fn truncated_udp_payload_is_ignored() {
-        let mut frame = ethernet_frame(ETHERTYPE_IPV4, &ipv4_udp_packet(b"hello"));
-        frame.truncate(ETHERNET_HEADER_LEN + 20 + 8 + 2);
-        let path = temp_file("truncated.pcap", &legacy_pcap(LINKTYPE_ETHERNET, &[frame]));
-
-        let (stats, frames) = collect(&path);
-        fs::remove_file(path).ok();
-
-        assert_eq!(stats.packets, 1);
-        assert_eq!(stats.game_packets, 0);
-        assert!(frames.is_empty());
+        assert_eq!(frames.len(), 1);
     }
 
     #[test]
     fn truncated_file_is_reported() {
-        let packet = ethernet_frame(ETHERTYPE_IPV4, &ipv4_udp_packet(b"hello"));
-        let mut contents = legacy_pcap(LINKTYPE_ETHERNET, std::slice::from_ref(&packet));
+        let packet = ethernet_frame(0x0800, &ipv4_udp_packet(b"hello"));
+        let mut contents = legacy_pcap(1, std::slice::from_ref(&packet));
         contents.extend_from_slice(&[1, 2, 3, 4]);
         let path = temp_file("truncated-file.pcap", &contents);
 
@@ -544,19 +418,30 @@ mod tests {
         fs::remove_file(path).ok();
 
         assert!(stats.truncated);
-        assert_eq!(frames, vec![packet]);
+        assert_eq!(frames[0].data, packet);
     }
 
     #[test]
-    fn unsupported_link_type_is_skipped() {
+    fn unsupported_link_type_is_emitted() {
         let packet = ipv4_udp_packet(b"hello");
-        let path = temp_file("unsupported.pcap", &legacy_pcap(999, &[packet]));
+        let path = temp_file(
+            "unsupported.pcap",
+            &legacy_pcap(999, std::slice::from_ref(&packet)),
+        );
 
         let (stats, frames) = collect(&path);
         fs::remove_file(path).ok();
 
         assert_eq!(stats.packets, 1);
-        assert_eq!(stats.unsupported_packets, 1);
-        assert!(frames.is_empty());
+        assert_eq!(frames[0].link_type, LinkType(999));
+    }
+
+    #[test]
+    fn empty_file_is_an_error() {
+        let path =
+            std::env::temp_dir().join(format!("post-irminsul-{}-zero.pcap", std::process::id()));
+        fs::write(&path, b"").unwrap();
+        assert!(read_capture_file(&path, |_| {}).is_err());
+        fs::remove_file(path).ok();
     }
 }

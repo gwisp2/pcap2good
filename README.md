@@ -119,16 +119,16 @@ response is not compressed decode normally.
 
 ## Bundled decoder
 
-The packet decoder is part of this crate as the
-[`auto_artifactarium`](src/auto_artifactarium) module. It is based on upstream
-revision `abbbf7a3f58846512250a789a76be2d3cdb115c1` (v1.4.0) of
-[`auto-artifactarium`], with two local changes:
+The packet pipeline lives in [`src/pipeline`](src/pipeline). It splits the
+capture into link-layer, UDP, KCP, decryption, command-framing and consumer
+stages, and keeps separate state for every game flow found in a capture.
 
-- `src/auto_artifactarium/kcp.rs` uses `web_time::SystemTime`, because the
-  standard library clock panics on `wasm32-unknown-unknown`.
-- The player property map (which carries the Mora balance) is matched by
-  content, so it keeps working when the game reshuffles command ids and field
-  numbers.
+The generated protobuf types and a few low-level helpers live in the
+[`auto_artifactarium`](src/auto_artifactarium) module, based on upstream
+revision `abbbf7a3f58846512250a789a76be2d3cdb115c1` (v1.4.0) of
+[`auto-artifactarium`]. Local changes include capture timestamps driving KCP
+rather than wall-clock time, and content-based matching for player data so it
+keeps working when the game reshuffles command ids and field numbers.
 
 The protobuf definitions live in
 [`src/auto_artifactarium/protos.proto`](src/auto_artifactarium/protos.proto).

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub use crate::auto_artifactarium::r#gen::protos::{AvatarInfo, Item};
 use indexmap::IndexMap;
@@ -19,7 +20,7 @@ pub struct ExportSettings {
 }
 
 pub struct PlayerData {
-    game_data: GameData,
+    game_data: Arc<GameData>,
     characters: Vec<AvatarInfo>,
     items: Vec<Item>,
     player_props: HashMap<u32, i64>,
@@ -28,7 +29,7 @@ pub struct PlayerData {
 }
 
 impl PlayerData {
-    pub fn new(game_data: GameData) -> Self {
+    pub fn new(game_data: Arc<GameData>) -> Self {
         Self {
             game_data,
             characters: Vec::new(),

@@ -6,25 +6,11 @@ use anyhow::Result;
 use serde::Serialize;
 
 use crate::capture::{self, CaptureStats};
-use crate::decode::{DecodeStats, Decoder};
+use crate::decode::{DecodeResult, DecodeStats, Decoder};
 use crate::good::Good;
+use crate::pipeline::flow::{FlowId, FlowOutcome, FlowStats};
+use crate::pipeline::{Warning, WarningCode};
 use crate::player_data::ExportSettings;
-
-/// An explanation of why the capture could not be fully decoded.
-#[derive(Clone, Debug, Serialize)]
-pub struct Warning {
-    pub message: String,
-    pub hint: Option<String>,
-}
-
-impl Warning {
-    fn new(message: impl Into<String>, hint: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-            hint: Some(hint.into()),
-        }
-    }
-}
 
 /// The decoded GOOD document plus statistics and warnings.
 #[derive(Debug, Serialize)]
@@ -34,6 +20,12 @@ pub struct DecodeOutcome {
     pub capture: CaptureStats,
     pub decode: DecodeStats,
     pub warnings: Vec<Warning>,
+    /// The flow whose data is exposed through `good`.
+    pub selected_flow: Option<FlowId>,
+    /// Every flow found in the capture, in first-seen order. The CLI and web
+    /// page use the first one, but the full list is kept for multi-flow users
+    /// and tests.
+    pub flows: Vec<FlowOutcome>,
 }
 
 /// Decodes a capture file.
@@ -42,10 +34,10 @@ pub fn decode_capture_file(
     settings: &ExportSettings,
     dump_dir: Option<PathBuf>,
 ) -> Result<DecodeOutcome> {
-    let mut decoder = Decoder::with_command_dump(dump_dir)?;
+    let mut decoder = Decoder::with_settings(dump_dir, settings.clone())?;
     let capture = capture::read_capture_file(path, |frame| decoder.process_frame(frame))?;
 
-    Ok(finish(&decoder, capture, settings))
+    Ok(finish(decoder.finish(capture)))
 }
 
 /// Decodes a capture that is already in memory.
@@ -54,54 +46,100 @@ pub fn decode_capture_bytes(
     settings: &ExportSettings,
     dump_dir: Option<PathBuf>,
 ) -> Result<DecodeOutcome> {
-    let mut decoder = Decoder::with_command_dump(dump_dir)?;
+    let mut decoder = Decoder::with_settings(dump_dir, settings.clone())?;
     let capture = capture::read_capture_bytes(bytes, |frame| decoder.process_frame(frame))?;
 
-    Ok(finish(&decoder, capture, settings))
+    Ok(finish(decoder.finish(capture)))
 }
 
-fn finish(decoder: &Decoder, capture: CaptureStats, settings: &ExportSettings) -> DecodeOutcome {
-    let good = decoder.export(settings);
-    let decode = decoder.stats();
+fn finish(result: DecodeResult) -> DecodeOutcome {
+    let DecodeResult {
+        capture,
+        decode,
+        mut flows,
+        diagnostics: _,
+    } = result;
+
+    for flow in &mut flows {
+        flow.warnings = warnings(&flow.stats);
+    }
+
+    let selected_index = flows
+        .iter()
+        .position(has_player_data)
+        .or_else(|| flows.iter().position(|flow| flow.stats.commands > 0))
+        .or_else(|| (!flows.is_empty()).then_some(0));
+    let selected = selected_index.and_then(|index| flows.get(index));
+    let good = selected
+        .map(|flow| flow.good.clone())
+        .unwrap_or_else(Good::empty);
+    let selected_stats = selected.map(|flow| flow.stats).unwrap_or_default();
+
+    let mut warnings = warnings(&selected_stats);
+    if flows.len() > 1 {
+        warnings.push(Warning::new(
+            WarningCode::MultipleFlows { count: flows.len() },
+            format!(
+                "the capture contains {} game flows; only the first flow with player data is exported",
+                flows.len()
+            ),
+            "run the decoder per connection if you need every flow",
+        ));
+    }
 
     DecodeOutcome {
-        warnings: warnings(&capture, &decode),
         good,
         capture,
         decode,
+        warnings,
+        selected_flow: selected.map(|flow| flow.id),
+        flows,
     }
 }
 
-fn warnings(capture: &CaptureStats, decode: &DecodeStats) -> Vec<Warning> {
-    if decode.item_packets != 0 || decode.avatar_packets != 0 {
+fn has_player_data(flow: &FlowOutcome) -> bool {
+    flow.stats.item_packets > 0
+        || flow.stats.avatar_packets > 0
+        || flow.stats.player_prop_packets > 0
+        || !flow.good.characters.is_empty()
+        || !flow.good.artifacts.is_empty()
+        || !flow.good.weapons.is_empty()
+}
+
+fn warnings(stats: &FlowStats) -> Vec<Warning> {
+    if stats.item_packets != 0 || stats.avatar_packets != 0 {
         return Vec::new();
     }
 
-    if decode.handshakes == 0 {
+    if stats.handshakes == 0 {
         vec![Warning::new(
+            WarningCode::NoHandshake,
             "no connection handshake was found in the capture",
             "start capturing before launching the game",
         )]
-    } else if decode.compressed_commands > 0 {
+    } else if stats.compressed_commands > 0 {
         vec![Warning::new(
+            WarningCode::CompressedLogin,
             "the game compressed its login response (Oodle Network TCP), which this decoder \
              cannot decompress",
             "the session key could not be derived; re-capture the session (the login response \
              is not always compressed)",
         )]
-    } else if capture.game_packets > 20 && decode.commands.saturating_mul(10) < capture.game_packets
+    } else if stats.game_datagrams > 20 && stats.commands.saturating_mul(10) < stats.game_datagrams
     {
         vec![Warning::new(
+            WarningCode::SessionKeyNotEstablished,
             format!(
                 "only {} commands could be decrypted from {} game packets, so the session key \
                  was not established",
-                decode.commands, capture.game_packets
+                stats.commands, stats.game_datagrams
             ),
             "the login response likely uses a format this decoder does not support yet (see the \
              README)",
         )]
     } else {
         vec![Warning::new(
+            WarningCode::NoPlayerData,
             "the capture contains no character or inventory data",
             "the game may not have sent its inventory during the capture",
         )]

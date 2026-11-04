@@ -10,10 +10,12 @@ pub mod capture;
 pub mod decode;
 pub mod gamedata;
 pub mod good;
+pub mod pipeline;
 pub mod player_data;
 pub mod proto_json;
 
-pub use api::{DecodeOutcome, Warning, decode_capture_bytes, decode_capture_file};
+pub use api::{DecodeOutcome, decode_capture_bytes, decode_capture_file};
+pub use pipeline::{Warning, WarningCode};
 pub use player_data::ExportSettings;
 
 #[cfg(target_arch = "wasm32")]

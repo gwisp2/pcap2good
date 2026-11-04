@@ -70,6 +70,20 @@ pub struct Good {
     pub materials: HashMap<String, u32>,
 }
 
+impl Good {
+    pub fn empty() -> Self {
+        Self {
+            format: "GOOD".to_string(),
+            version: 3,
+            source: "post-irminsul".to_string(),
+            characters: Vec::new(),
+            artifacts: Vec::new(),
+            weapons: Vec::new(),
+            materials: HashMap::new(),
+        }
+    }
+}
+
 /// GOOD key for the Traveler before their element is appended.
 pub const TRAVELER_KEY: &str = "Traveler";
 

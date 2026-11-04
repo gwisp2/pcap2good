@@ -57,6 +57,7 @@ pub fn matches_get_player_token_rsp(
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct Achievement {
     pub id: u32,
@@ -64,6 +65,7 @@ pub struct Achievement {
     pub finish_timestamp: Option<u32>,
 }
 
+#[allow(dead_code)]
 pub fn matches_achievement_all_data_notify(data: Vec<u8>) -> Option<Vec<Achievement>> {
     if data.len() < 1000 {
         return None;

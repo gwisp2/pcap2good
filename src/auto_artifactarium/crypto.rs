@@ -18,6 +18,9 @@ pub fn decrypt_command(key: &[u8], encrypted: &mut [u8]) {
 }
 
 pub fn lookup_initial_key(initial_keys: &HashMap<u16, Vec<u8>>, bytes: &[u8]) -> Option<Vec<u8>> {
+    if bytes.len() < 2 {
+        return None;
+    }
     let version = u16::from_be_bytes(bytes[..2].try_into().unwrap()) ^ 0x4567;
 
     // attempt to fetch from user provided initial keys, otherwise use our own baked-in ones
@@ -62,7 +65,8 @@ pub fn guess(seed: i64, server_seed: u64, depth: i32, data: Vec<u8>) -> Option<V
         let mut clone = data.clone();
         decrypt_command(&key, &mut clone);
 
-        if clone[0] == 0x45
+        if clone.len() >= 12
+            && clone[0] == 0x45
             && clone[1] == 0x67
             && clone[clone.len() - 2] == 0x89
             && clone[clone.len() - 1] == 0xAB
