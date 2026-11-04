@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$revision = "792978e5503ecfba73dcb3562ed44a0d35a2abe2"
+$revision = "d54f6f0d423ded9d055bb740a3e5f3aa8f2667f1"
 $base = "https://gitlab.com/Dimbreath/animegamedata2/-/raw/$revision"
 $target = Join-Path $root "3rdparty/AnimeGameData"
 
