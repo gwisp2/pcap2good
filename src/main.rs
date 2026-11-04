@@ -1,12 +1,13 @@
 //! Offline counterpart to Irminsul: reads a Genshin Impact packet capture and
-//! writes the player's characters, weapons and artifacts to stdout as GOOD
-//! data.
+//! writes the player's characters, weapons and artifacts to stdout or a file as
+//! GOOD data.
 
-use std::io::{self, Write};
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::{self, BufWriter, Write};
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{ArgAction, Args, Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
@@ -19,7 +20,7 @@ use post_irminsul::player_data::ExportSettings;
     version,
     about = "Extract Genshin Impact player data from a packet capture",
     long_about = "Extract Genshin Impact characters, weapons and artifacts from a .pcap or \
-                  .pcapng capture and write them to stdout as GOOD data.\n\n\
+                  .pcapng capture and write them to stdout or to a file as GOOD data.\n\n\
                   The capture must include the game's connection handshake, so start capturing \
                   before Genshin Impact is launched or before logging in."
 )]
@@ -34,7 +35,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Decode a packet capture and write GOOD data to stdout
+    /// Decode a packet capture and write GOOD data to stdout or a file
     Decode(DecodeArgs),
 }
 
@@ -42,6 +43,10 @@ enum Command {
 struct DecodeArgs {
     /// Path to the .pcap or .pcapng file to decode
     path: PathBuf,
+
+    /// Write the GOOD data to this file instead of stdout
+    #[arg(short, long, value_name = "FILE")]
+    out: Option<PathBuf>,
 
     /// Write every decoded command to this directory as .bin and .json
     #[arg(long, value_name = "DIR")]
@@ -100,10 +105,14 @@ fn decode(args: DecodeArgs) -> Result<()> {
         serde_json::to_string_pretty(&outcome.good)?
     };
 
-    match write_output(&json) {
-        // The reader closed the pipe (e.g. `| head`); nothing left to do.
-        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return Ok(()),
-        result => result?,
+    if let Some(path) = &args.out {
+        write_file(path, &json)?;
+    } else {
+        match write_json(&mut io::stdout().lock(), &json) {
+            // The reader closed the pipe (e.g. `| head`); nothing left to do.
+            Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return Ok(()),
+            result => result?,
+        }
     }
 
     eprintln!(
@@ -127,13 +136,20 @@ fn decode(args: DecodeArgs) -> Result<()> {
     Ok(())
 }
 
-/// Writes the export to stdout, ending with a newline.
-fn write_output(json: &str) -> io::Result<()> {
-    let stdout = io::stdout();
-    let mut stdout = stdout.lock();
-    stdout.write_all(json.as_bytes())?;
-    stdout.write_all(b"\n")?;
-    stdout.flush()
+/// Writes the export to a file, ending with a newline.
+fn write_file(path: &Path, json: &str) -> Result<()> {
+    let file = File::create(path)
+        .with_context(|| format!("Failed to create output file {}", path.display()))?;
+    let mut writer = BufWriter::new(file);
+
+    write_json(&mut writer, json)
+        .with_context(|| format!("Failed to write output file {}", path.display()))
+}
+
+/// Writes the export to `writer`, ending with a newline.
+fn write_json(writer: &mut impl Write, json: &str) -> io::Result<()> {
+    writeln!(writer, "{json}")?;
+    writer.flush()
 }
 
 fn init_tracing(verbosity: u8) {
@@ -141,7 +157,7 @@ fn init_tracing(verbosity: u8) {
     // for every packet it cannot decrypt, which is expected when a capture
     // contains traffic from before the handshake.
     let default_filter = match verbosity {
-        0 => "warn,auto_artifactarium=off,post_irminsul=info",
+        0 => "warn,post_irminsul::auto_artifactarium=off,post_irminsul=info",
         1 => "info",
         2 => "debug",
         _ => "trace",

@@ -17,20 +17,25 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 anyhow = "1.0.99"
-auto-artifactarium = { path = "vendor/auto-artifactarium" }
 base64 = "0.22.1"
 clap = { version = "4.5.47", features = ["derive"] }
 etherparse = "0.16.0"
 flate2 = "1.1.9"
 indexmap = "2.11.1"
+kcp = { git = "https://github.com/hashblen/mhy-kcp" }
 pcap-parser = "0.17.0"
+protobuf = "3.7.1"
+rand_mt = "4.2"
+rsa = "0.9"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.143", features = ["alloc"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+web-time = "1"
 
 [build-dependencies]
 flate2 = "1.1.9"
+protobuf-codegen = "3.7.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.143", features = ["alloc"] }
 
@@ -39,9 +44,6 @@ serde_json = { version = "1.0.143", features = ["alloc"] }
 # This enables it for the whole dependency graph (rsa/rand).
 getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen = "0.2"
-
-[dev-dependencies]
-protobuf = "3.7.1"
 
 [profile.release]
 opt-level = 2

@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use auto_artifactarium::{
+use crate::auto_artifactarium::{
     ConnectionPacket, GameCommand, GamePacket, GameSniffer, matches_avatar_packet,
     matches_item_packet, matches_player_data_packet,
 };
+use anyhow::{Context, Result};
 use base64::prelude::*;
 use flate2::read::GzDecoder;
 use serde::Serialize;

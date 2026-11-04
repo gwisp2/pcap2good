@@ -5,6 +5,7 @@
 //! warnings. The CLI and the wasm build are thin wrappers around them.
 
 pub mod api;
+pub mod auto_artifactarium;
 pub mod capture;
 pub mod decode;
 pub mod gamedata;

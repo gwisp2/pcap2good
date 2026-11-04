@@ -12,7 +12,6 @@ try {
     }
 
     & (Join-Path $root "scripts/fetch-game-data.ps1")
-    & (Join-Path $root "scripts/fetch-auto-artifactarium.ps1")
 
     cargo build --release --target wasm32-unknown-unknown --lib
     wasm-bindgen target/wasm32-unknown-unknown/release/post_irminsul.wasm `

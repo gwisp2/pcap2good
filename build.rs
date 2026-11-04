@@ -1,4 +1,5 @@
-//! Embeds the game data (names, sets, affixes, ...) in the binary.
+//! Embeds the game data (names, sets, affixes, ...) in the binary and generates
+//! the protobuf types used by the bundled packet decoder.
 //!
 //! The data is not downloaded: the build requires a local copy of Dimbreath's
 //! AnimeGameData dump at `3rdparty/AnimeGameData`. The normalization below is
@@ -20,6 +21,9 @@ use serde::de::DeserializeOwned;
 /// Directory holding the AnimeGameData checkout, relative to the project root.
 const GAME_DATA_SUBDIR: &str = "3rdparty/AnimeGameData";
 
+/// Protocol definitions used by the bundled packet decoder.
+const PROTO_INPUT: &str = "src/auto_artifactarium/protos.proto";
+
 /// Files read from the data dump. Also used for Cargo rebuild tracking.
 const INPUT_FILES: &[&str] = &[
     "TextMap/TextMap_MediumEN.json",
@@ -37,6 +41,8 @@ const INPUT_FILES: &[&str] = &[
 ];
 
 fn main() -> io::Result<()> {
+    generate_protos();
+
     println!("cargo:rerun-if-changed=build.rs");
 
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").ok_or_else(|| {
@@ -74,6 +80,18 @@ fn main() -> io::Result<()> {
     write_game_data(&db, &out_dir.join("game_data.gz"))?;
 
     Ok(())
+}
+
+/// Generates the Rust types for the game's protobuf messages.
+fn generate_protos() {
+    protobuf_codegen::Codegen::new()
+        .pure()
+        .cargo_out_dir("protos")
+        .include("src/auto_artifactarium")
+        .inputs([PROTO_INPUT])
+        .run_from_script();
+
+    println!("cargo:rerun-if-changed={PROTO_INPUT}");
 }
 
 /// The document consumed by the runtime (see `src/gamedata.rs`).

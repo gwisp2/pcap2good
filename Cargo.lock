@@ -80,23 +80,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
-name = "auto-artifactarium"
-version = "1.4.0"
-dependencies = [
- "anyhow",
- "base64",
- "clap",
- "etherparse",
- "kcp",
- "protobuf",
- "protobuf-codegen",
- "rand_mt",
- "rsa",
- "tracing",
- "web-time",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -597,20 +580,24 @@ name = "post-irminsul"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "auto-artifactarium",
  "base64",
  "clap",
  "etherparse",
  "flate2",
  "getrandom 0.2.17",
  "indexmap",
+ "kcp",
  "pcap-parser",
  "protobuf",
+ "protobuf-codegen",
+ "rand_mt",
+ "rsa",
  "serde",
  "serde_json",
  "tracing",
  "tracing-subscriber",
  "wasm-bindgen",
+ "web-time",
 ]
 
 [[package]]

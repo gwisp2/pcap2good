@@ -3,11 +3,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use auto_artifactarium::r#gen::protos::{
+use base64::prelude::*;
+use post_irminsul::auto_artifactarium::r#gen::protos::{
     AvatarDataNotify, AvatarInfo, Equip, Item, Material, PacketWithItems, PropMapEntry, PropValue,
     Reliquary, Weapon, equip, item,
 };
-use base64::prelude::*;
 use post_irminsul::player_data::PROP_PLAYER_SCOIN;
 use protobuf::Message;
 
@@ -358,6 +358,44 @@ fn compact_output_is_a_single_line() {
             .count(),
         1
     );
+}
+
+#[test]
+fn writes_good_data_to_output_file() {
+    let frames = vec![ethernet_frame(&udp_packet(&[0, 0, 0, 0xff]))];
+    let capture = temp_capture("output-file", &frames);
+    let out =
+        std::env::temp_dir().join(format!("post-irminsul-it-{}-good.json", std::process::id()));
+    fs::remove_file(&out).ok();
+
+    let output = run_cli(&capture, &["--out", out.to_str().unwrap()]);
+    fs::remove_file(&capture).ok();
+
+    assert!(
+        output.status.success(),
+        "decode failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "stdout should be empty when --out is used: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    let contents = fs::read_to_string(&out).expect("output file was not written");
+    let good: serde_json::Value =
+        serde_json::from_str(&contents).expect("output file is not valid JSON");
+    assert_eq!(good["format"], "GOOD");
+    assert_eq!(good["version"], 3);
+    assert!(
+        contents.ends_with('\n'),
+        "output file must end with a newline"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Exported 0 characters"), "{stderr}");
+
+    fs::remove_file(&out).ok();
 }
 
 #[test]

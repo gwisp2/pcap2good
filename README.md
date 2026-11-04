@@ -3,7 +3,7 @@
 Offline counterpart to [Irminsul](https://github.com/konkers/irminsul): instead of
 sniffing live game traffic, it reads a packet capture from disk and prints the
 player's characters, weapons and artifacts as [GOOD](https://frzyc.github.io/genshin-optimizer/#/doc)
-v3 data on stdout.
+v3 data, on stdout or in a file.
 
 ```console
 $ postirminsul decode path/to/capture.pcap
@@ -18,10 +18,11 @@ $ postirminsul decode path/to/capture.pcap
 }
 ```
 
-Only the JSON document is written to stdout. Progress, warnings and errors go
-to stderr, so the output can be piped or redirected:
+Unless `--out` is used, only the JSON document is written to stdout. Progress,
+warnings and errors go to stderr, so the output can be piped or redirected:
 
 ```console
+$ postirminsul decode capture.pcap --out good.json
 $ postirminsul decode capture.pcap > good.json
 $ postirminsul decode capture.pcap | jq '.artifacts | length'
 ```
@@ -59,6 +60,7 @@ update that file from upstream Irminsul and rebuild.
 
 | Option | Description |
 | --- | --- |
+| `-o`, `--out <FILE>` | Write the GOOD data to `<FILE>` instead of stdout |
 | `--fake-initialize-4th-line` | Pretend unactivated fourth substats have already rolled |
 | `--compact` | Single-line JSON instead of indented JSON |
 | `--dump-commands <DIR>` | Write every decoded command to a directory as `<NNNN>-<id>.bin` and `<NNNN>-<id>.json` (for debugging) |
@@ -115,35 +117,44 @@ response is not compressed decode normally.
 
 [`auto-artifactarium`]: https://github.com/konkers/auto-artifactarium
 
+## Bundled decoder
+
+The packet decoder is part of this crate as the
+[`auto_artifactarium`](src/auto_artifactarium) module. It is based on upstream
+revision `abbbf7a3f58846512250a789a76be2d3cdb115c1` (v1.4.0) of
+[`auto-artifactarium`], with two local changes:
+
+- `src/auto_artifactarium/kcp.rs` uses `web_time::SystemTime`, because the
+  standard library clock panics on `wasm32-unknown-unknown`.
+- The player property map (which carries the Mora balance) is matched by
+  content, so it keeps working when the game reshuffles command ids and field
+  numbers.
+
+The protobuf definitions live in
+[`src/auto_artifactarium/protos.proto`](src/auto_artifactarium/protos.proto).
+`build.rs` regenerates the Rust bindings into `OUT_DIR` whenever that file
+changes, so `cargo build` / `cargo check` is all that is needed after editing it.
+
 ## Building
 
 Rust 1.88 or newer is required.
 
-The build needs two local dependencies; neither is committed:
-
-- [Dimbreath's AnimeGameData][anime-game-data] dump under
-  `3rdparty/AnimeGameData` (a symlink or junction to an existing checkout
-  works).
-- `auto-artifactarium`, downloaded and patched into `vendor/auto-artifactarium`
-  by the fetch script. The patch lives in
-  [`patches/auto-artifactarium-web-time.patch`](patches/auto-artifactarium-web-time.patch)
-  and fixes its clock for wasm.
+The build needs one local dependency, which is not committed:
+[Dimbreath's AnimeGameData][anime-game-data] dump under `3rdparty/AnimeGameData`
+(a symlink or junction to an existing checkout works).
 
 ```console
 $ ./scripts/fetch-game-data.ps1              # or .sh on other platforms
-$ ./scripts/fetch-auto-artifactarium.ps1     # or .sh on other platforms
 $ cargo build --release
 ```
 
-The first script downloads only the 12 files the build reads (about 25 MB); a
-full AnimeGameData checkout moved or linked to `3rdparty/AnimeGameData` works
-too. The second downloads and patches `auto-artifactarium`.
+The script downloads only the 12 files the build reads (about 25 MB); a full
+AnimeGameData checkout moved or linked to `3rdparty/AnimeGameData` works too.
 
 The build reads names, artifact sets, affixes and related tables from the data
 directory and embeds them in the binary, so decoding itself works fully
-offline. Both directories are gitignored; update them and rebuild when the game
-data or `auto-artifactarium` changes. Use `-Force`/`--force` to re-fetch the
-latter after changing the patch.
+offline. The directory is gitignored; update it and rebuild when the game data
+changes.
 
 ```console
 $ cargo test
@@ -168,7 +179,7 @@ $ python -m http.server 8000 -d web
 Open <http://localhost:8000>. On other platforms the build is:
 
 ```console
-$ ./scripts/fetch-auto-artifactarium.sh
+$ ./scripts/fetch-game-data.sh
 $ cargo build --release --target wasm32-unknown-unknown --lib
 $ wasm-bindgen target/wasm32-unknown-unknown/release/post_irminsul.wasm \
       --target web --out-dir web/pkg --out-name post_irminsul
@@ -189,12 +200,12 @@ GitHub Pages only serves static files, so the wasm package is built in CI. The
    tab.
 
 The site is served at `https://<user>.github.io/<repo>/`. The workflow fetches
-the pinned game data, downloads and patches `auto-artifactarium`, installs the
-matching `wasm-bindgen-cli`, builds `web/pkg`, and deploys `web/`.
+the pinned game data, installs the matching `wasm-bindgen-cli`, builds
+`web/pkg`, and deploys `web/`.
 
-Nothing generated or machine-specific is committed: `3rdparty/`, `vendor/`,
-`target/` and `web/pkg/` are gitignored. If your default branch is neither
-`main` nor `master`, update the `on.push.branches` list in the workflow.
+Nothing generated or machine-specific is committed: `3rdparty/`, `target/` and
+`web/pkg/` are gitignored. If your default branch is neither `main` nor
+`master`, update the `on.push.branches` list in the workflow.
 
 ## Differences from Irminsul
 

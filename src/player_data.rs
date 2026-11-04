@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-pub use auto_artifactarium::r#gen::protos::{AvatarInfo, Item};
+pub use crate::auto_artifactarium::r#gen::protos::{AvatarInfo, Item};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 

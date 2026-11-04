@@ -3,7 +3,7 @@
 //! Both the legacy pcap format and pcapng are supported. Captures can use any
 //! of the link types that are commonly produced by tcpdump, Wireshark and
 //! Npcap; frames are normalized to Ethernet before being handed to
-//! [`auto_artifactarium`], which expects an Ethernet header.
+//! [`crate::auto_artifactarium`], which expects an Ethernet header.
 
 use std::fs::File;
 use std::io::{Cursor, Read};
