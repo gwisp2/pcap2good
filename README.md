@@ -89,12 +89,13 @@ usually means the capture started too late to see the handshake.
 
 ## Known limitations
 
-The packet decoding is provided by [`auto-artifactarium`], the same library
-Irminsul uses, so every limitation of that library applies here.
+The packet pipeline itself is implemented in this crate. Only a few low-level
+pieces are partially embedded from [`auto-artifactarium`], the decoder Irminsul
+uses, so limitations of that decoder still apply where those pieces are used.
 
 After the login exchange the game encrypts its traffic with a session key, which
-the sniffer derives from the login response. Some Genshin Impact 7.1 sessions get
-that response compressed with Oodle Network TCP, which the library does not
+the decoder derives from the login response. Some Genshin Impact 7.1 sessions get
+that response compressed with Oodle Network TCP, which the decoder does not
 decompress, so the session key is never derived and only the handful of login
 commands that use the dispatch key can be read. The CLI reports this as:
 
@@ -117,18 +118,19 @@ response is not compressed decode normally.
 
 [`auto-artifactarium`]: https://github.com/konkers/auto-artifactarium
 
-## Bundled decoder
+## Packet pipeline
 
 The packet pipeline lives in [`src/pipeline`](src/pipeline). It splits the
 capture into link-layer, UDP, KCP, decryption, command-framing and consumer
 stages, and keeps separate state for every game flow found in a capture.
 
-The generated protobuf types and a few low-level helpers live in the
-[`auto_artifactarium`](src/auto_artifactarium) module, based on upstream
-revision `abbbf7a3f58846512250a789a76be2d3cdb115c1` (v1.4.0) of
-[`auto-artifactarium`]. Local changes include capture timestamps driving KCP
-rather than wall-clock time, and content-based matching for player data so it
-keeps working when the game reshuffles command ids and field numbers.
+The upstream [`auto-artifactarium`] crate is not used as a dependency. Some of
+its low-level pieces are partially embedded in the
+[`auto_artifactarium`](src/auto_artifactarium) module instead: the generated
+protobuf types and a few cryptographic/seed helpers adapted from upstream
+revision `abbbf7a3f58846512250a789a76be2d3cdb115c1` (v1.4.0). The pipeline,
+KCP handling and command framing are implemented here; player-data matching uses
+those embedded helpers.
 
 The protobuf definitions live in
 [`src/auto_artifactarium/protos.proto`](src/auto_artifactarium/protos.proto).
