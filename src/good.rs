@@ -75,7 +75,7 @@ impl Good {
         Self {
             format: "GOOD".to_string(),
             version: 3,
-            source: "post-irminsul".to_string(),
+            source: "pcap2good".to_string(),
             characters: Vec::new(),
             artifacts: Vec::new(),
             weapons: Vec::new(),

@@ -65,7 +65,7 @@ impl PlayerData {
         good::Good {
             format: "GOOD".to_string(),
             version: 3,
-            source: "post-irminsul".to_string(),
+            source: "pcap2good".to_string(),
             characters: self.export_genshin_optimizer_characters(),
             artifacts: if settings.fake_initialize_4th_line {
                 fake_uninitialized_4th_line(artifacts)

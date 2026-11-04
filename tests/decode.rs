@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use base64::prelude::*;
-use post_irminsul::auto_artifactarium::r#gen::protos::{
+use pcap2good::auto_artifactarium::r#gen::protos::{
     AvatarDataNotify, AvatarInfo, Equip, Item, Material, PacketWithItems, PropMapEntry, PropValue,
     Reliquary, Weapon, equip, item,
 };
-use post_irminsul::player_data::PROP_PLAYER_SCOIN;
+use pcap2good::player_data::PROP_PLAYER_SCOIN;
 use protobuf::Message;
 
 const ETHERNET_HEADER_LEN: usize = 14;
@@ -278,7 +278,7 @@ fn avatar_frame(client_port: u16, sequence: u32, level: i64) -> Vec<u8> {
 }
 
 fn run_cli(path: &Path, extra_args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_postirminsul"))
+    Command::new(env!("CARGO_BIN_EXE_pcap2good"))
         .arg("decode")
         .arg(path)
         .args(extra_args)
@@ -288,7 +288,7 @@ fn run_cli(path: &Path, extra_args: &[&str]) -> Output {
 
 fn temp_capture(name: &str, frames: &[Vec<u8>]) -> PathBuf {
     let path = std::env::temp_dir().join(format!(
-        "post-irminsul-it-{}-{name}.pcap",
+        "pcap2good-it-{}-{name}.pcap",
         std::process::id()
     ));
     write_pcap(&path, frames);
@@ -316,7 +316,7 @@ fn decodes_characters_weapons_and_artifacts() {
 
     assert_eq!(good["format"], "GOOD");
     assert_eq!(good["version"], 3);
-    assert_eq!(good["source"], "post-irminsul");
+    assert_eq!(good["source"], "pcap2good");
 
     let characters = good["characters"].as_array().unwrap();
     assert_eq!(characters.len(), 1, "characters: {characters:?}");
@@ -391,7 +391,7 @@ fn writes_good_data_to_output_file() {
     let frames = vec![ethernet_frame(&udp_packet(&[0, 0, 0, 0xff]))];
     let capture = temp_capture("output-file", &frames);
     let out =
-        std::env::temp_dir().join(format!("post-irminsul-it-{}-good.json", std::process::id()));
+        std::env::temp_dir().join(format!("pcap2good-it-{}-good.json", std::process::id()));
     fs::remove_file(&out).ok();
 
     let output = run_cli(&capture, &["--out", out.to_str().unwrap()]);
@@ -428,7 +428,7 @@ fn writes_good_data_to_output_file() {
 fn dumps_commands_as_bin_and_json() {
     let path = temp_capture("dump", &capture_with_game_data());
     let dump_dir =
-        std::env::temp_dir().join(format!("post-irminsul-it-{}-dump", std::process::id()));
+        std::env::temp_dir().join(format!("pcap2good-it-{}-dump", std::process::id()));
     fs::remove_dir_all(&dump_dir).ok();
 
     let output = run_cli(&path, &["--dump-commands", dump_dir.to_str().unwrap()]);
@@ -569,7 +569,7 @@ fn ethernet_header_is_the_expected_length() {
 #[test]
 fn empty_file_is_an_error() {
     let path =
-        std::env::temp_dir().join(format!("post-irminsul-it-{}-zero.pcap", std::process::id()));
+        std::env::temp_dir().join(format!("pcap2good-it-{}-zero.pcap", std::process::id()));
     fs::write(&path, b"").unwrap();
     let output = run_cli(&path, &[]);
     fs::remove_file(&path).ok();
@@ -590,7 +590,7 @@ fn multiple_flows_are_decoded_independently() {
     ];
 
     let outcome =
-        post_irminsul::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);
@@ -601,7 +601,7 @@ fn multiple_flows_are_decoded_independently() {
     assert_eq!(outcome.flows[1].good.characters[0].level, 80);
     assert!(outcome.warnings.iter().any(|warning| matches!(
         warning.code,
-        post_irminsul::WarningCode::MultipleFlows { count: 2 }
+        pcap2good::WarningCode::MultipleFlows { count: 2 }
     )));
 }
 
@@ -615,7 +615,7 @@ fn reconnecting_on_the_same_flow_key_starts_a_new_session() {
     ];
 
     let outcome =
-        post_irminsul::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);
@@ -633,7 +633,7 @@ fn selects_the_first_flow_with_player_data() {
     ];
 
     let outcome =
-        post_irminsul::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);
@@ -652,7 +652,7 @@ fn handshake_on_one_flow_does_not_reset_another_flow() {
     ];
 
     let outcome =
-        post_irminsul::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);

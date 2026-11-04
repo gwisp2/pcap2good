@@ -38,8 +38,8 @@ jobs:
       - name: Build wasm package
         run: |
           cargo build --release --target wasm32-unknown-unknown --lib
-          wasm-bindgen target/wasm32-unknown-unknown/release/post_irminsul.wasm \
-            --target web --out-dir web/pkg --out-name post_irminsul
+          wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good.wasm \
+            --target web --out-dir web/pkg --out-name pcap2good
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

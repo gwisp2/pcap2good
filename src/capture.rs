@@ -331,7 +331,7 @@ mod tests {
 
     fn temp_file(name: &str, contents: &[u8]) -> std::path::PathBuf {
         let path =
-            std::env::temp_dir().join(format!("post-irminsul-{}-{name}", std::process::id()));
+            std::env::temp_dir().join(format!("pcap2good-{}-{name}", std::process::id()));
         fs::write(&path, contents).unwrap();
         path
     }
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn empty_file_is_an_error() {
         let path =
-            std::env::temp_dir().join(format!("post-irminsul-{}-zero.pcap", std::process::id()));
+            std::env::temp_dir().join(format!("pcap2good-{}-zero.pcap", std::process::id()));
         fs::write(&path, b"").unwrap();
         assert!(read_capture_file(&path, |_| {}).is_err());
         fs::remove_file(path).ok();

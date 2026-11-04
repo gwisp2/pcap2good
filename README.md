@@ -1,4 +1,4 @@
-# post-irminsul
+# pcap2good
 
 Offline counterpart to [Irminsul](https://github.com/konkers/irminsul): instead of
 sniffing live game traffic, it reads a packet capture from disk and prints the
@@ -6,11 +6,11 @@ player's characters, weapons and artifacts as [GOOD](https://frzyc.github.io/gen
 v3 data, on stdout or in a file.
 
 ```console
-$ postirminsul decode path/to/capture.pcap
+$ pcap2good decode path/to/capture.pcap
 {
   "format": "GOOD",
   "version": 3,
-  "source": "post-irminsul",
+  "source": "pcap2good",
   "characters": [ ... ],
   "artifacts": [ ... ],
   "weapons": [ ... ],
@@ -22,9 +22,9 @@ Unless `--out` is used, only the JSON document is written to stdout. Progress,
 warnings and errors go to stderr, so the output can be piped or redirected:
 
 ```console
-$ postirminsul decode capture.pcap --out good.json
-$ postirminsul decode capture.pcap > good.json
-$ postirminsul decode capture.pcap | jq '.artifacts | length'
+$ pcap2good decode capture.pcap --out good.json
+$ pcap2good decode capture.pcap > good.json
+$ pcap2good decode capture.pcap | jq '.artifacts | length'
 ```
 
 When the capture contains a player property update, the player's Mora balance is
@@ -183,8 +183,8 @@ Open <http://localhost:8000>. On other platforms the build is:
 ```console
 $ ./scripts/fetch-game-data.sh
 $ cargo build --release --target wasm32-unknown-unknown --lib
-$ wasm-bindgen target/wasm32-unknown-unknown/release/post_irminsul.wasm \
-      --target web --out-dir web/pkg --out-name post_irminsul
+$ wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good.wasm \
+      --target web --out-dir web/pkg --out-name pcap2good
 ```
 
 `web/pkg` is generated and gitignored. The page needs a real HTTP server (ES

@@ -14,8 +14,8 @@ try {
     & (Join-Path $root "scripts/fetch-game-data.ps1")
 
     cargo build --release --target wasm32-unknown-unknown --lib
-    wasm-bindgen target/wasm32-unknown-unknown/release/post_irminsul.wasm `
-        --target web --out-dir web/pkg --out-name post_irminsul
+    wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good.wasm `
+        --target web --out-dir web/pkg --out-name pcap2good
 
     Write-Host "Built web/pkg. Serve it with: python -m http.server 8000 -d web"
 } finally {

@@ -11,12 +11,12 @@ use anyhow::{Context, Result};
 use clap::{ArgAction, Args, Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
-use post_irminsul::decode_capture_file;
-use post_irminsul::player_data::ExportSettings;
+use pcap2good::decode_capture_file;
+use pcap2good::player_data::ExportSettings;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "postirminsul",
+    name = "pcap2good",
     version,
     about = "Extract Genshin Impact player data from a packet capture",
     long_about = "Extract Genshin Impact characters, weapons and artifacts from a .pcap or \
@@ -157,7 +157,7 @@ fn init_tracing(verbosity: u8) {
     // for every packet it cannot decrypt, which is expected when a capture
     // contains traffic from before the handshake.
     let default_filter = match verbosity {
-        0 => "warn,post_irminsul::auto_artifactarium=off,post_irminsul=info",
+        0 => "warn,pcap2good::auto_artifactarium=off,pcap2good=info",
         1 => "info",
         2 => "debug",
         _ => "trace",

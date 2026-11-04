@@ -1,4 +1,4 @@
-import init, { decode } from "./pkg/post_irminsul.js";
+import init, { decode } from "./pkg/pcap2good.js";
 
 let initialised = null;
 
