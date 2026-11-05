@@ -69,10 +69,6 @@ impl GameCommand {
         T::parse_from_bytes(&self.body)
     }
 
-    pub fn is_avatar_data_notify(&self) -> bool {
-        self.command_id == CommandId::AvatarDataNotify as u16
-    }
-
     pub fn is_player_store_notify(&self) -> bool {
         self.command_id == CommandId::PlayerStoreNotify as u16
     }
@@ -90,7 +86,6 @@ impl std::fmt::Debug for GameCommand {
 
 #[repr(u16)]
 enum CommandId {
-    AvatarDataNotify = 20143,
     PlayerStoreNotify = 20892,
 }
 

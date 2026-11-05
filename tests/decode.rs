@@ -142,10 +142,10 @@ fn character_message() -> Vec<u8> {
     character_message_with(90)
 }
 
-fn character_message_with(level: i64) -> Vec<u8> {
+fn character_avatar(avatar_id: u32, guid: u64, level: i64) -> AvatarInfo {
     let mut avatar = AvatarInfo::new();
-    avatar.avatar_id = CHARACTER_ID;
-    avatar.guid = 100;
+    avatar.avatar_id = avatar_id;
+    avatar.guid = guid;
     avatar.avatar_type = 1;
     avatar.prop_map.insert(4001, prop(level)); // level
     avatar.prop_map.insert(1002, prop(6)); // ascension
@@ -155,10 +155,42 @@ fn character_message_with(level: i64) -> Vec<u8> {
     avatar.skill_level_map.insert(10019, 10); // elemental burst
     avatar.equip_guid_list.push(ARTIFACT_GUID);
     avatar.equip_guid_list.push(WEAPON_GUID);
+    avatar
+}
 
+fn character_message_with(level: i64) -> Vec<u8> {
     let mut notify = AvatarDataNotify::new();
-    notify.avatar_list.push(avatar);
+    notify
+        .avatar_list
+        .push(character_avatar(CHARACTER_ID, 100, level));
     notify.write_to_bytes().unwrap()
+}
+
+fn write_varint(out: &mut Vec<u8>, mut value: u64) {
+    while value >= 0x80 {
+        out.push((value as u8) | 0x80);
+        value >>= 7;
+    }
+    out.push(value as u8);
+}
+
+fn write_message_field(out: &mut Vec<u8>, field_number: u32, bytes: &[u8]) {
+    write_varint(out, (u64::from(field_number) << 3) | 2);
+    write_varint(out, bytes.len() as u64);
+    out.extend_from_slice(bytes);
+}
+
+/// Builds a packet body with `messages` under an arbitrary top-level field.
+fn message_list_with_field<T: Message>(field_number: u32, messages: &[T]) -> Vec<u8> {
+    let mut body = Vec::new();
+    for message in messages {
+        write_message_field(&mut body, field_number, &message.write_to_bytes().unwrap());
+    }
+    body
+}
+
+fn avatar_list_with_field(field_number: u32, avatars: &[AvatarInfo]) -> Vec<u8> {
+    message_list_with_field(field_number, avatars)
 }
 
 fn artifact_item() -> Item {
@@ -578,6 +610,80 @@ fn empty_file_is_an_error() {
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("is empty"), "{stderr}");
+}
+
+#[test]
+fn avatar_data_is_detected_by_content_not_command_id() {
+    let body = avatar_list_with_field(42, &[character_avatar(CHARACTER_ID, 100, 90)]);
+    let frames = vec![
+        handshake_frame(40000),
+        ethernet_frame(&udp_packet_for_client(
+            40000,
+            &kcp_segment(0, &game_command(4242, body)),
+        )),
+    ];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.good.characters.len(), 1);
+    assert_eq!(outcome.good.characters[0].level, 90);
+    assert_eq!(outcome.flows[0].stats.avatar_packets, 1);
+}
+
+#[test]
+fn avatar_field_with_an_out_of_range_id_is_not_used() {
+    let body = avatar_list_with_field(
+        42,
+        &[
+            character_avatar(CHARACTER_ID, 100, 90),
+            character_avatar(12_345, 101, 80),
+        ],
+    );
+    let frames = vec![
+        handshake_frame(40000),
+        ethernet_frame(&udp_packet_for_client(
+            40000,
+            &kcp_segment(0, &game_command(4242, body)),
+        )),
+    ];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert!(outcome.good.characters.is_empty());
+    assert_eq!(outcome.flows[0].stats.avatar_packets, 0);
+}
+
+#[test]
+fn character_items_are_not_mistaken_for_avatar_lists() {
+    let item = Item {
+        // Character items share the player avatar id range.
+        item_id: CHARACTER_ID,
+        guid: 100,
+        detail: Some(item::Detail::Material(Material {
+            count: 1,
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    let body = message_list_with_field(42, &[item]);
+    let frames = vec![
+        handshake_frame(40000),
+        ethernet_frame(&udp_packet_for_client(
+            40000,
+            &kcp_segment(0, &game_command(4242, body)),
+        )),
+    ];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert!(outcome.good.characters.is_empty());
+    assert_eq!(outcome.flows[0].stats.avatar_packets, 0);
 }
 
 #[test]

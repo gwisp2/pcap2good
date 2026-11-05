@@ -6,7 +6,6 @@ use protobuf::Message;
 use protobuf::UnknownValueRef::*;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 
-use super::r#gen::protos::AvatarDataNotify;
 use super::r#gen::protos::AvatarInfo;
 use super::r#gen::protos::Item;
 use super::r#gen::protos::PacketWithItems;
@@ -197,19 +196,51 @@ pub fn matches_items_all_data_notify(data: &[u8]) -> Option<Vec<Item>> {
     Some(items)
 }
 
+/// Recognises an `AvatarDataNotify`-shaped packet by content rather than by
+/// command id or field number.
+///
+/// The packet must contain a length-delimited field whose repeated entries all
+/// decode as [`AvatarInfo`] with a player avatar id and a non-zero guid. Both the
+/// command id and the field number are reshuffled between game versions, while
+/// player avatar ids stay in a stable range.
 pub fn matches_avatars_all_data_notify(data: &[u8]) -> Option<Vec<AvatarInfo>> {
-    let packet = AvatarDataNotify::parse_from_bytes(data).ok()?;
-    let avatar_list: Vec<AvatarInfo> = packet
-        .avatar_list
-        .into_iter()
-        .filter(|avatar| avatar.avatar_id != 0 && avatar.guid != 0)
-        .collect();
+    let packet = Unk::parse_from_bytes(data).ok()?;
 
-    if avatar_list.is_empty() {
-        return None;
+    // `Some` means every entry seen for this field is a valid avatar so far;
+    // `None` means the field is not an avatar list.
+    let mut candidates: HashMap<u32, Option<Vec<AvatarInfo>>> = HashMap::new();
+    for (field_number, field_data) in packet.unknown_fields().iter() {
+        let LengthDelimited(bytes) = field_data else {
+            continue;
+        };
+
+        let candidate = candidates
+            .entry(field_number)
+            .or_insert_with(|| Some(Vec::new()));
+        match AvatarInfo::parse_from_bytes(bytes) {
+            Ok(avatar) if is_player_avatar(&avatar) => {
+                if let Some(avatars) = candidate {
+                    avatars.push(avatar);
+                }
+            }
+            _ => *candidate = None,
+        }
     }
 
-    Some(avatar_list)
+    candidates
+        .into_iter()
+        .filter_map(|(_, avatars)| avatars)
+        .filter(|avatars| !avatars.is_empty())
+        .max_by_key(|avatars| avatars.len())
+}
+
+fn is_player_avatar(avatar: &AvatarInfo) -> bool {
+    (10_000_000..=10_000_999).contains(&avatar.avatar_id)
+        && avatar.guid != 0
+        // Character items use the same id range, but an item has no avatar
+        // property map. Requiring one keeps item packets from looking like
+        // avatar lists once the command id is no longer available.
+        && !avatar.prop_map.is_empty()
 }
 
 /// `PROP_PLAYER_SCOIN`: the player's Mora balance.

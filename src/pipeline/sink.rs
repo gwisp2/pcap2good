@@ -69,9 +69,6 @@ fn matches_item_packet(command: &DirectedCommand) -> Option<Vec<Item>> {
 }
 
 fn matches_avatar_packet(command: &DirectedCommand) -> Option<Vec<AvatarInfo>> {
-    if !command.command.is_avatar_data_notify() {
-        return None;
-    }
     matches_avatars_all_data_notify(&command.command.body)
 }
 
