@@ -10,7 +10,7 @@
 //!
 //! [`anime-game-data`]: https://github.com/konkers/anime-game-data
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 use anyhow::{Result, anyhow};
@@ -22,6 +22,7 @@ struct Database {
     affix_map: HashMap<u32, Affix>,
     artifact_map: HashMap<u32, Artifact>,
     character_map: HashMap<u32, String>,
+    known_item_ids: HashSet<u32>,
     material_map: HashMap<u32, String>,
     property_map: HashMap<u32, Property>,
     skill_element_map: HashMap<u32, Element>,
@@ -69,6 +70,11 @@ impl GameData {
             .material_map
             .get(&id)
             .ok_or_else(|| anyhow!("Unable to fetch material {id}"))
+    }
+
+    /// Whether `id` is an item id known from the embedded game data.
+    pub fn is_known_item_id(&self, id: u32) -> bool {
+        self.db.known_item_ids.contains(&id)
     }
 
     pub fn get_property(&self, id: u32) -> Result<&Property> {
@@ -269,6 +275,7 @@ mod tests {
             }
         },
         "character_map": { "10000061": "Kirara" },
+        "known_item_ids": [100002, 11505, 31534],
         "material_map": { "100002": "Sunsettia" },
         "property_map": { "50960": "PyroDamage" },
         "set_map": {},
@@ -298,6 +305,10 @@ mod tests {
         assert_eq!(data.get_skill_element(10118).unwrap(), &Element::Dendro);
         assert_eq!(data.get_tps_avatar_id_female().unwrap(), 10000135);
         assert_eq!(data.get_tps_avatar_id_male().unwrap(), 10000134);
+        assert!(data.is_known_item_id(100002));
+        assert!(data.is_known_item_id(11505));
+        assert!(data.is_known_item_id(31534));
+        assert!(!data.is_known_item_id(999_999));
 
         let artifact = data.get_artifact(31534).unwrap();
         assert_eq!(artifact.set, "Marechaussee Hunter");

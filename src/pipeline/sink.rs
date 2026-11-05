@@ -44,7 +44,7 @@ impl PlayerDataSink {
 
 impl CommandSink for PlayerDataSink {
     fn on_command(&mut self, command: &DirectedCommand, stats: &mut FlowStats) {
-        if let Some(items) = matches_item_packet(command) {
+        if let Some(items) = matches_item_packet(command, self.data.game_data()) {
             self.data.process_items(&items);
             stats.item_packets += 1;
         } else if let Some(avatars) = matches_avatar_packet(command) {
@@ -61,11 +61,8 @@ impl CommandSink for PlayerDataSink {
     fn finish(&mut self) {}
 }
 
-fn matches_item_packet(command: &DirectedCommand) -> Option<Vec<Item>> {
-    if !command.command.is_player_store_notify() {
-        return None;
-    }
-    matches_items_all_data_notify(&command.command.body)
+fn matches_item_packet(command: &DirectedCommand, game_data: &GameData) -> Option<Vec<Item>> {
+    matches_items_all_data_notify(&command.command.body, game_data)
 }
 
 fn matches_avatar_packet(command: &DirectedCommand) -> Option<Vec<AvatarInfo>> {

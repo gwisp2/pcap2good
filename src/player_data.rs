@@ -22,7 +22,7 @@ pub struct ExportSettings {
 pub struct PlayerData {
     game_data: Arc<GameData>,
     characters: Vec<AvatarInfo>,
-    items: Vec<Item>,
+    items: IndexMap<u64, Item>,
     player_props: HashMap<u32, i64>,
 
     character_equip_guid_map: HashMap<u64, u32>,
@@ -33,10 +33,14 @@ impl PlayerData {
         Self {
             game_data,
             characters: Vec::new(),
-            items: Vec::new(),
+            items: IndexMap::new(),
             player_props: HashMap::new(),
             character_equip_guid_map: HashMap::new(),
         }
+    }
+
+    pub(crate) fn game_data(&self) -> &GameData {
+        &self.game_data
     }
 
     pub fn process_characters(&mut self, avatars: &[AvatarInfo]) {
@@ -51,7 +55,13 @@ impl PlayerData {
     }
 
     pub fn process_items(&mut self, items: &[Item]) {
-        self.items = items.into();
+        // Item packets can be either the full store or a partial update; merge
+        // by GUID so a later change packet does not erase the inventory.
+        for item in items {
+            if item.guid != 0 {
+                self.items.insert(item.guid, item.clone());
+            }
+        }
     }
 
     pub fn process_player_props(&mut self, props: HashMap<u32, i64>) {
@@ -150,7 +160,7 @@ impl PlayerData {
 
     pub fn export_genshin_optimizer_artifacts(&self) -> Vec<good::Artifact> {
         self.items
-            .iter()
+            .values()
             .filter_map(|item| {
                 if !item.has_equip() {
                     return None;
@@ -226,7 +236,7 @@ impl PlayerData {
 
     pub fn export_genshin_optimizer_weapons(&self) -> Vec<good::Weapon> {
         self.items
-            .iter()
+            .values()
             .filter_map(|item| {
                 if !item.has_equip() {
                     return None;
@@ -264,7 +274,7 @@ impl PlayerData {
     pub fn export_genshin_optimizer_materials(&self) -> HashMap<String, u32> {
         let mut materials: HashMap<String, u32> = self
             .items
-            .iter()
+            .values()
             .filter_map(|item| {
                 if !item.has_material() {
                     return None;

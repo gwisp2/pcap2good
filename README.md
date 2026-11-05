@@ -150,13 +150,15 @@ $ ./scripts/fetch-game-data.ps1              # or .sh on other platforms
 $ cargo build --release
 ```
 
-The script downloads only the 12 files the build reads (about 25 MB); a full
+The script downloads only the 17 files the build reads (about 36 MB); a full
 AnimeGameData checkout moved or linked to `3rdparty/AnimeGameData` works too.
 
-The build reads names, artifact sets, affixes and related tables from the data
-directory and embeds them in the binary, so decoding itself works fully
-offline. The directory is gitignored; update it and rebuild when the game data
-changes.
+The build reads names, artifact sets, affixes, item ids and related tables from
+the data directory and embeds them in the binary, so decoding itself works
+fully offline. The item-id set covers every item-bearing Excel config
+(materials, weapons, artifacts, furniture, TPS weapons, Beyond materials,
+Beyond hall facilities and display items). The directory is gitignored; update
+it and rebuild when the game data changes.
 
 ```console
 $ cargo test

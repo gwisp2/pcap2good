@@ -6,7 +6,7 @@
 //! adapted from `anime-game-data`, Copyright (c) 2025 Erik Gilling, MIT
 //! licensed.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::{self, File};
 use std::io;
@@ -30,13 +30,30 @@ const INPUT_FILES: &[&str] = &[
     "ExcelBinOutput/AvatarExcelConfigData.json",
     "ExcelBinOutput/AvatarSkillDepotExcelConfigData.json",
     "ExcelBinOutput/AvatarSkillExcelConfigData.json",
+    "ExcelBinOutput/BeyondHallFacilityExcelConfigData.json",
+    "ExcelBinOutput/BydMaterialExcelConfigData.json",
     "ExcelBinOutput/ConstValueExcelConfigData.json",
+    "ExcelBinOutput/DisplayItemExcelConfigData.json",
     "ExcelBinOutput/EquipAffixExcelConfigData.json",
+    "ExcelBinOutput/HomeWorldFurnitureExcelConfigData.json",
     "ExcelBinOutput/MaterialExcelConfigData.json",
     "ExcelBinOutput/ReliquaryAffixExcelConfigData.json",
     "ExcelBinOutput/ReliquaryExcelConfigData.json",
     "ExcelBinOutput/ReliquaryMainPropExcelConfigData.json",
     "ExcelBinOutput/ReliquarySetExcelConfigData.json",
+    "ExcelBinOutput/TpsWeaponExcelConfigData.json",
+    "ExcelBinOutput/WeaponExcelConfigData.json",
+];
+
+/// Every Excel file that declares items which can appear in an inventory.
+const ITEM_ID_FILES: &[&str] = &[
+    "ExcelBinOutput/BeyondHallFacilityExcelConfigData.json",
+    "ExcelBinOutput/BydMaterialExcelConfigData.json",
+    "ExcelBinOutput/DisplayItemExcelConfigData.json",
+    "ExcelBinOutput/HomeWorldFurnitureExcelConfigData.json",
+    "ExcelBinOutput/MaterialExcelConfigData.json",
+    "ExcelBinOutput/ReliquaryExcelConfigData.json",
+    "ExcelBinOutput/TpsWeaponExcelConfigData.json",
     "ExcelBinOutput/WeaponExcelConfigData.json",
 ];
 
@@ -100,6 +117,7 @@ struct Database {
     affix_map: HashMap<u32, Affix>,
     artifact_map: HashMap<u32, Artifact>,
     character_map: HashMap<u32, String>,
+    known_item_ids: HashSet<u32>,
     material_map: HashMap<u32, String>,
     property_map: HashMap<u32, Property>,
     skill_element_map: HashMap<u32, Element>,
@@ -323,6 +341,12 @@ mod excel {
     }
 
     #[derive(Debug, Deserialize)]
+    pub struct ItemId {
+        #[serde(default)]
+        pub id: u32,
+    }
+
+    #[derive(Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct ReliquaryAffix {
         #[serde(default)]
@@ -386,6 +410,7 @@ fn load_database(data_dir: &Path) -> io::Result<Database> {
     let weapon_map = fetch_weapon_map(data_dir, &text_map)?;
     let material_map = fetch_material_map(data_dir, &text_map)?;
     let character_map = fetch_character_map(data_dir, &text_map)?;
+    let known_item_ids = fetch_known_item_ids(data_dir)?;
     let skill_element_map = fetch_skill_element_map(data_dir)?;
     let skill_type_map = fetch_skill_type_map(data_dir)?;
 
@@ -401,6 +426,7 @@ fn load_database(data_dir: &Path) -> io::Result<Database> {
         affix_map,
         artifact_map,
         character_map,
+        known_item_ids,
         material_map,
         property_map,
         skill_element_map,
@@ -485,6 +511,20 @@ fn fetch_material_map(
         .iter()
         .filter_map(|entry| Some((entry.id, text_map.get(&entry.name_text_map_hash)?.clone())))
         .collect())
+}
+
+fn fetch_known_item_ids(data_dir: &Path) -> io::Result<HashSet<u32>> {
+    let mut ids = HashSet::new();
+    for relative in ITEM_ID_FILES {
+        let entries: Vec<excel::ItemId> = read_json(data_dir, relative)?;
+        ids.extend(
+            entries
+                .into_iter()
+                .map(|entry| entry.id)
+                .filter(|id| *id != 0),
+        );
+    }
+    Ok(ids)
 }
 
 fn fetch_property_map(data_dir: &Path) -> io::Result<HashMap<u32, Property>> {

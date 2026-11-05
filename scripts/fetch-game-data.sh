@@ -13,13 +13,18 @@ files=(
     "ExcelBinOutput/AvatarExcelConfigData.json"
     "ExcelBinOutput/AvatarSkillDepotExcelConfigData.json"
     "ExcelBinOutput/AvatarSkillExcelConfigData.json"
+    "ExcelBinOutput/BeyondHallFacilityExcelConfigData.json"
+    "ExcelBinOutput/BydMaterialExcelConfigData.json"
     "ExcelBinOutput/ConstValueExcelConfigData.json"
+    "ExcelBinOutput/DisplayItemExcelConfigData.json"
     "ExcelBinOutput/EquipAffixExcelConfigData.json"
+    "ExcelBinOutput/HomeWorldFurnitureExcelConfigData.json"
     "ExcelBinOutput/MaterialExcelConfigData.json"
     "ExcelBinOutput/ReliquaryAffixExcelConfigData.json"
     "ExcelBinOutput/ReliquaryExcelConfigData.json"
     "ExcelBinOutput/ReliquaryMainPropExcelConfigData.json"
     "ExcelBinOutput/ReliquarySetExcelConfigData.json"
+    "ExcelBinOutput/TpsWeaponExcelConfigData.json"
     "ExcelBinOutput/WeaponExcelConfigData.json"
 )
 

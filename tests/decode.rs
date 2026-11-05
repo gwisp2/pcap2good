@@ -248,15 +248,30 @@ fn material_item(guid: u64, count: u32) -> Item {
     }
 }
 
+fn unknown_item(guid: u64) -> Item {
+    Item {
+        item_id: 0xDEAD_BEEF,
+        guid,
+        detail: Some(item::Detail::Material(Material {
+            count: 1,
+            ..Default::default()
+        })),
+        ..Default::default()
+    }
+}
+
+/// A full inventory: artifact, weapon, and ten materials.
+fn inventory_items() -> Vec<Item> {
+    let mut items = vec![artifact_item(), weapon_item()];
+    for i in 0..10 {
+        items.push(material_item(100 + i, 1));
+    }
+    items
+}
+
 fn items_message() -> Vec<u8> {
     let mut packet = PacketWithItems::new();
-    packet.items.push(artifact_item());
-    packet.items.push(weapon_item());
-    // The item packet is only recognized when it holds a full inventory, so
-    // pad it with some materials.
-    for i in 0..10 {
-        packet.items.push(material_item(100 + i, 1));
-    }
+    packet.items.extend(inventory_items());
     packet.write_to_bytes().unwrap()
 }
 
@@ -306,6 +321,13 @@ fn avatar_frame(client_port: u16, sequence: u32, level: i64) -> Vec<u8> {
             sequence,
             &game_command(AVATAR_DATA_NOTIFY, character_message_with(level)),
         ),
+    ))
+}
+
+fn content_frame(command_id: u16, body: Vec<u8>) -> Vec<u8> {
+    ethernet_frame(&udp_packet_for_client(
+        40000,
+        &kcp_segment(0, &game_command(command_id, body)),
     ))
 }
 
@@ -684,6 +706,94 @@ fn character_items_are_not_mistaken_for_avatar_lists() {
 
     assert!(outcome.good.characters.is_empty());
     assert_eq!(outcome.flows[0].stats.avatar_packets, 0);
+}
+
+#[test]
+fn item_data_is_detected_by_content_not_command_id() {
+    let body = message_list_with_field(42, &inventory_items());
+    let frames = vec![handshake_frame(40000), content_frame(4242, body)];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows[0].stats.item_packets, 1);
+    assert!(outcome.good.materials.contains_key("Sunsettia"));
+}
+
+#[test]
+fn item_list_with_fewer_than_ten_items_is_ignored() {
+    let items: Vec<Item> = inventory_items().into_iter().take(9).collect();
+    let body = message_list_with_field(42, &items);
+    let frames = vec![handshake_frame(40000), content_frame(4242, body)];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows[0].stats.item_packets, 0);
+}
+
+#[test]
+fn item_list_with_too_many_unknown_ids_is_ignored() {
+    let mut items: Vec<Item> = (0..9).map(|i| material_item(100 + i, 1)).collect();
+    // 9/11 known is below 90%.
+    items.push(unknown_item(200));
+    items.push(unknown_item(201));
+
+    let body = message_list_with_field(42, &items);
+    let frames = vec![handshake_frame(40000), content_frame(4242, body)];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows[0].stats.item_packets, 0);
+}
+
+#[test]
+fn item_list_at_ninety_percent_known_is_accepted() {
+    let mut items: Vec<Item> = (0..9).map(|i| material_item(100 + i, 1)).collect();
+    // 9/10 known is exactly 90%.
+    items.push(unknown_item(200));
+
+    let body = message_list_with_field(42, &items);
+    let frames = vec![handshake_frame(40000), content_frame(4242, body)];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows[0].stats.item_packets, 1);
+    assert!(outcome.good.materials.contains_key("Sunsettia"));
+}
+
+#[test]
+fn later_item_updates_do_not_replace_the_inventory() {
+    let full = message_list_with_field(42, &inventory_items());
+    let updates: Vec<Item> = (0..11).map(|i| material_item(500 + i, 1)).collect();
+    let update = message_list_with_field(42, &updates);
+
+    let frames = vec![
+        handshake_frame(40000),
+        ethernet_frame(&udp_packet_for_client(
+            40000,
+            &kcp_segment(0, &game_command(4242, full)),
+        )),
+        ethernet_frame(&udp_packet_for_client(
+            40000,
+            &kcp_segment(1, &game_command(4242, update)),
+        )),
+    ];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows[0].stats.item_packets, 2);
+    assert_eq!(outcome.good.artifacts.len(), 1);
+    assert_eq!(outcome.good.weapons.len(), 1);
+    assert!(outcome.good.materials.contains_key("Sunsettia"));
 }
 
 #[test]

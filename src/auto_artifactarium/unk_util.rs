@@ -6,9 +6,10 @@ use protobuf::Message;
 use protobuf::UnknownValueRef::*;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 
+use crate::gamedata::GameData;
+
 use super::r#gen::protos::AvatarInfo;
 use super::r#gen::protos::Item;
-use super::r#gen::protos::PacketWithItems;
 use super::r#gen::protos::PropMapEntry;
 use super::r#gen::protos::Unk;
 
@@ -178,22 +179,51 @@ pub fn matches_achievement_all_data_notify(data: Vec<u8>) -> Option<Vec<Achievem
     }
 }
 
-pub fn matches_items_all_data_notify(data: &[u8]) -> Option<Vec<Item>> {
-    let packet = PacketWithItems::parse_from_bytes(data).ok()?;
+/// Recognises a `PacketWithItems`-shaped packet by content rather than by
+/// command id or field number.
+///
+/// A candidate field must hold at least ten items and at least 90% of those
+/// items must have an id known from the embedded game data. Unknown ids are
+/// tolerated because a capture may come from a newer game version than the
+/// bundled data.
+pub fn matches_items_all_data_notify(data: &[u8], game_data: &GameData) -> Option<Vec<Item>> {
+    let packet = Unk::parse_from_bytes(data).ok()?;
 
-    // Filter out items with 0 (default) item ID.
-    let items: Vec<Item> = packet
-        .items
-        .into_iter()
-        .filter(|item| item.item_id != 0 && item.guid != 0)
-        .collect();
+    // `Some` means every entry seen for this field is a valid Item so far;
+    // `None` means the field is not an item list.
+    let mut candidates: HashMap<u32, Option<Vec<Item>>> = HashMap::new();
+    for (field_number, field_data) in packet.unknown_fields().iter() {
+        let LengthDelimited(bytes) = field_data else {
+            continue;
+        };
 
-    // Differentiate items packets from other that look alike.
-    if items.len() < 10 {
-        return None;
+        let candidate = candidates
+            .entry(field_number)
+            .or_insert_with(|| Some(Vec::new()));
+        match Item::parse_from_bytes(bytes) {
+            Ok(item) if item.item_id != 0 && item.guid != 0 => {
+                if let Some(items) = candidate {
+                    items.push(item);
+                }
+            }
+            // Empty/default entries are placeholders, not a reason to reject
+            // the whole field.
+            Ok(_) => {}
+            Err(_) => *candidate = None,
+        }
     }
 
-    Some(items)
+    candidates
+        .into_iter()
+        .filter_map(|(_, items)| items)
+        .filter(|items| {
+            let known = items
+                .iter()
+                .filter(|item| game_data.is_known_item_id(item.item_id))
+                .count();
+            items.len() >= 10 && known * 10 >= items.len() * 9
+        })
+        .max_by_key(|items| items.len())
 }
 
 /// Recognises an `AvatarDataNotify`-shaped packet by content rather than by

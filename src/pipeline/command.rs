@@ -68,10 +68,6 @@ impl GameCommand {
     pub fn parse_proto<T: Message>(&self) -> protobuf::Result<T> {
         T::parse_from_bytes(&self.body)
     }
-
-    pub fn is_player_store_notify(&self) -> bool {
-        self.command_id == CommandId::PlayerStoreNotify as u16
-    }
 }
 
 impl std::fmt::Debug for GameCommand {
@@ -82,11 +78,6 @@ impl std::fmt::Debug for GameCommand {
             .field("data_len", &self.data_len)
             .finish()
     }
-}
-
-#[repr(u16)]
-enum CommandId {
-    PlayerStoreNotify = 20892,
 }
 
 #[derive(Clone, Debug)]
