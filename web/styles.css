@@ -42,6 +42,29 @@ main {
   padding: 3rem 1.25rem 4rem;
 }
 
+.brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.app-icon {
+  flex: 0 0 auto;
+  width: clamp(72px, 14vw, 112px);
+  height: auto;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.35));
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .brand {
+    gap: 0.9rem;
+  }
+}
+
 h1 {
   margin: 0 0 0.5rem;
   font-size: clamp(2rem, 5vw, 3rem);

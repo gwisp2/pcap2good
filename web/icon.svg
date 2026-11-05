@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">pcap2good data star</title>
+  <defs>
+    <linearGradient id="bg" x1="24" y1="8" x2="232" y2="248" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d2441"/>
+      <stop offset="1" stop-color="#040a13"/>
+    </linearGradient>
+    <linearGradient id="dataStar" x1="38" y1="20" x2="222" y2="238" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7af4ff"/>
+      <stop offset=".42" stop-color="#2bd3ec"/>
+      <stop offset="1" stop-color="#076f9c"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#33d9f2" stop-opacity=".38"/>
+      <stop offset="1" stop-color="#33d9f2" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="starGlow" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="3.4"/>
+    </filter>
+
+    <path id="spark" d="M0-11L3.1-3.1 11 0 3.1 3.1 0 11-3.1 3.1-11 0-3.1-3.1Z"/>
+    <path id="bigStar" d="M128 10C135 83 173 121 246 128 173 135 135 173 128 246 121 173 83 135 10 128 83 121 121 83 128 10Z"/>
+    <clipPath id="starClip">
+      <use href="#bigStar"/>
+    </clipPath>
+  </defs>
+
+  <rect x="4" y="4" width="248" height="248" rx="46" fill="url(#bg)" stroke="#1b3f62" stroke-width="2"/>
+  <circle cx="128" cy="128" r="120" fill="url(#halo)"/>
+
+  <!-- central data star -->
+  <use href="#bigStar" fill="#03101b" opacity=".7" transform="translate(0 4)"/>
+  <use href="#bigStar" fill="url(#dataStar)" stroke="#052b3d" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- binary fill clipped to the star -->
+  <g clip-path="url(#starClip)" fill="#04283f" opacity=".66"
+     font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace"
+     font-size="21" font-weight="700" letter-spacing="3" text-anchor="middle">
+    <text x="128" y="36">0101010</text>
+    <text x="128" y="58">1011010</text>
+    <text x="128" y="80">0110101</text>
+    <text x="128" y="102">1010011</text>
+    <text x="128" y="124">0101101</text>
+    <text x="128" y="146">1101010</text>
+    <text x="128" y="168">0010110</text>
+    <text x="128" y="190">1010101</text>
+    <text x="128" y="212">0110010</text>
+    <text x="128" y="234">1101001</text>
+  </g>
+
+  <use href="#bigStar" fill="none" stroke="#d9fbff" stroke-opacity=".26" stroke-width="3"
+       transform="translate(128 128) scale(.8) translate(-128 -128)"/>
+
+  <!-- larger stars, some overlapping the central star -->
+  <g>
+    <use href="#spark" transform="translate(38 42) scale(1.05)" fill="#ffe68a" filter="url(#starGlow)" opacity=".8"/>
+    <use href="#spark" transform="translate(38 42) scale(1.05)" fill="#ffe68a"/>
+
+    <use href="#spark" transform="translate(218 48) scale(1.35)" fill="#c9f9ff" filter="url(#starGlow)" opacity=".8"/>
+    <use href="#spark" transform="translate(218 48) scale(1.35)" fill="#c9f9ff"/>
+
+    <use href="#spark" transform="translate(212 210) scale(1.15)" fill="#dffbff" filter="url(#starGlow)" opacity=".8"/>
+    <use href="#spark" transform="translate(212 210) scale(1.15)" fill="#dffbff"/>
+
+    <use href="#spark" transform="translate(42 214) scale(.95)" fill="#8ff4ff" filter="url(#starGlow)" opacity=".8"/>
+    <use href="#spark" transform="translate(42 214) scale(.95)" fill="#8ff4ff"/>
+
+    <use href="#spark" transform="translate(198 98) scale(.8)" fill="#ffe68a"/>
+    <use href="#spark" transform="translate(58 164) scale(.65)" fill="#dffbff"/>
+  </g>
+</svg>
