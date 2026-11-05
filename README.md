@@ -190,6 +190,37 @@ $ wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good.wasm \
 `web/pkg` is generated and gitignored. The page needs a real HTTP server (ES
 modules and `fetch` do not work from `file://`).
 
+## Desktop app (egui)
+
+A native desktop front end lives in [`gui/`](gui). It calls
+[`decode_capture_file`](src/api.rs) directly, so no WebAssembly or web server is
+involved. The start screen offers **Open capture file** and a disabled **Live
+capture** placeholder. Choosing a capture starts decoding immediately; the app
+shows a centered `Decoding...` label, then a compact summary of the decoded
+characters, artifacts, weapons, items, Mora and flows together with any warnings
+and a large **Export GOOD** button. Capture files can also be dropped on the
+window, and a small option below the buttons enables the fourth-substat
+workaround. Keyboard shortcuts: `Ctrl+O` open, `Ctrl+S` export.
+
+```console
+# Run without a capture pre-selected:
+$ cargo run --manifest-path gui/Cargo.toml
+
+# Or open a capture straight away:
+$ cargo run --manifest-path gui/Cargo.toml -- capture.pcap
+```
+
+Build a release binary with:
+
+```console
+$ cargo build --release --manifest-path gui/Cargo.toml
+```
+
+The app uses `eframe`/`egui` for rendering and `rfd` for native file dialogs.
+It needs an OpenGL-capable desktop; on Linux that means X11 or Wayland (the file
+dialogs use the XDG desktop portal). Like the rest of the tool it only reads
+capture files; live capture is not included.
+
 ## Deploying to GitHub Pages
 
 GitHub Pages only serves static files, so the wasm package is built in CI. The
@@ -205,16 +236,16 @@ The site is served at `https://<user>.github.io/<repo>/`. The workflow fetches
 the pinned game data, installs the matching `wasm-bindgen-cli`, builds
 `web/pkg`, and deploys `web/`.
 
-Nothing generated or machine-specific is committed: `3rdparty/`, `target/` and
-`web/pkg/` are gitignored. If your default branch is neither `main` nor
-`master`, update the `on.push.branches` list in the workflow.
+Nothing generated or machine-specific is committed: `3rdparty/`, `target/`,
+`gui/target/` and `web/pkg/` are gitignored. If your default branch is neither
+`main` nor `master`, update the `on.push.branches` list in the workflow.
 
 ## Differences from Irminsul
 
 - Reads a capture file instead of capturing live traffic; no admin/root rights
   and no Npcap/pktmon dependency to decode.
-- Command line plus a static in-browser (WASM) front end; no live capture,
-  update checker, achievements or wish history.
+- Command line plus a static in-browser (WASM) front end and a native egui
+  desktop app; no live capture, update checker, achievements or wish history.
 - Handles `.pcap` and `.pcapng` files with legacy pcap and pcapng sections.
 
 ## License
