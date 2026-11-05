@@ -14,50 +14,44 @@
         <div class="brand-copy">
           <h1>pcap2good</h1>
           <p class="lede">
-            Extract characters, weapons and artifacts from a Genshin Impact
-            <code>.pcap</code>/<code>.pcapng</code> capture as
-            <a href="https://frzyc.github.io/genshin-optimizer/#/doc" rel="noreferrer">GOOD</a>
-            data. Everything runs locally in your browser; the capture is never uploaded.
+            Extract characters, weapons, artifacts and completed achievements from
+            a Genshin Impact <code>.pcap</code>/<code>.pcapng</code> capture.
+            GOOD data and achievements are saved as separate JSON files.
+            Everything runs locally in your browser; the capture is never uploaded.
           </p>
         </div>
       </header>
 
-      <form id="decode-form">
+      <section id="decode-panel">
         <label id="drop-zone" class="drop-zone" for="capture">
           <input id="capture" class="visually-hidden" type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap" />
           <strong id="drop-title">Drop a capture here</strong>
           <span id="drop-subtitle">or click to choose a .pcap / .pcapng file</span>
         </label>
 
-        <div class="manual-row">
-          <button id="manual-button" class="manual-button" type="button">
-            How to make a capture?
-          </button>
-        </div>
-
-        <fieldset>
-          <legend>Options</legend>
-          <label class="checkbox">
-            <input id="fake-4th-line" type="checkbox" />
-            Pretend unactivated fourth substats have already rolled
-          </label>
-        </fieldset>
-
-        <div class="actions">
-          <button id="decode-button" type="submit" disabled>Decode capture</button>
-          <button id="download-button" type="button" class="secondary" hidden>
-            Download GOOD JSON
-          </button>
-          <button id="download-achievements-button" type="button" class="secondary" hidden>
-            Download achievements JSON
-          </button>
+        <div id="decoding" class="decoding" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Decoding...</span>
         </div>
 
         <p id="status" role="status" aria-live="polite"></p>
-      </form>
+      </section>
 
       <section id="result" hidden>
         <h2>Result</h2>
+
+        <div class="result-actions">
+          <button id="download-button" type="button" disabled>
+            Download GOOD JSON
+          </button>
+          <button id="download-achievements-button" type="button" disabled>
+            Download achievements
+          </button>
+          <button id="decode-another-button" type="button" class="secondary decode-another">
+            Decode another file
+          </button>
+        </div>
+
         <dl id="stats" class="stats"></dl>
 
         <div class="extracted">
@@ -75,6 +69,11 @@
           <pre id="output"></pre>
           <p id="preview-note" class="note" hidden></p>
         </details>
+
+        <details>
+          <summary>Achievements</summary>
+          <pre id="achievements-output"></pre>
+        </details>
       </section>
 
       <footer>
@@ -84,29 +83,6 @@
         </p>
       </footer>
     </main>
-
-    <dialog id="manual-dialog" aria-labelledby="manual-title">
-      <div class="manual-shell">
-        <div class="manual-toolbar">
-          <strong id="manual-title">How to make a capture?</strong>
-          <button id="manual-zoom-out" class="icon-button secondary" type="button" aria-label="Zoom out">−</button>
-          <span id="manual-zoom" class="manual-zoom-label" aria-live="polite">100%</span>
-          <button id="manual-zoom-in" class="icon-button secondary" type="button" aria-label="Zoom in">+</button>
-          <button id="manual-fit" class="small-button secondary" type="button">Fit</button>
-          <button id="manual-actual" class="small-button secondary" type="button">1:1</button>
-          <button id="manual-close" class="icon-button secondary" type="button" aria-label="Close guide">✕</button>
-        </div>
-
-        <div id="manual-viewport" class="manual-viewport">
-          <div class="manual-canvas">
-            <img id="manual-image" alt="pcap2good usage guide" draggable="false" />
-          </div>
-          <div id="manual-loading" class="manual-loading" role="status">Loading guide…</div>
-        </div>
-
-        <p class="manual-hint">Drag to pan · Ctrl/⌘ + wheel to zoom · Esc to close</p>
-      </div>
-    </dialog>
 
     <script type="module" src="./app.js"></script>
   </body>

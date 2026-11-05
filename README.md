@@ -182,9 +182,8 @@ $ cargo test
 
 A static browser front end lives in [`web/`](web). It runs the decoder in a Web
 Worker via WebAssembly, so the capture never leaves the machine and the page can
-be served from any static file host. The **How to make a capture?** button under
-the drop zone opens `web/guide.png` in a pan and zoom viewer. Completed
-achievements can be downloaded separately as a stardb-compatible JSON file.
+be served from any static file host. Completed achievements can be downloaded
+separately as a stardb-compatible JSON file.
 
 ```console
 # The CLI version must match the wasm-bindgen crate in Cargo.lock.
