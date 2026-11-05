@@ -21,6 +21,7 @@ use pcap2good::player_data::ExportSettings;
     about = "Extract Genshin Impact player data from a packet capture",
     long_about = "Extract Genshin Impact characters, weapons and artifacts from a .pcap or \
                   .pcapng capture and write them to stdout or to a file as GOOD data.\n\n\
+                  Completed achievements are extracted separately with --achievements.\n\n\
                   The capture must include the game's connection handshake, so start capturing \
                   before Genshin Impact is launched or before logging in."
 )]
@@ -47,6 +48,10 @@ struct DecodeArgs {
     /// Write the GOOD data to this file instead of stdout
     #[arg(short, long, value_name = "FILE")]
     out: Option<PathBuf>,
+
+    /// Write completed achievements to this JSON file
+    #[arg(long, value_name = "FILE")]
+    achievements: Option<PathBuf>,
 
     /// Write every decoded command to this directory as .bin and .json
     #[arg(long, value_name = "DIR")]
@@ -99,6 +104,15 @@ fn decode(args: DecodeArgs) -> Result<()> {
     let settings = args.export.settings();
     let outcome = decode_capture_file(&args.path, &settings, args.dump_commands)?;
 
+    if let Some(path) = &args.achievements {
+        let achievements = if compact {
+            serde_json::to_string(&outcome.achievements)?
+        } else {
+            serde_json::to_string_pretty(&outcome.achievements)?
+        };
+        write_file(path, &achievements)?;
+    }
+
     let json = if compact {
         serde_json::to_string(&outcome.good)?
     } else {
@@ -124,6 +138,10 @@ fn decode(args: DecodeArgs) -> Result<()> {
         outcome.good.characters.len(),
         outcome.good.artifacts.len(),
         outcome.good.weapons.len()
+    );
+    eprintln!(
+        "Achievements: {} completed",
+        outcome.achievements.gi_achievements.len()
     );
 
     for warning in &outcome.warnings {

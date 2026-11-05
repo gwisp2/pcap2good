@@ -30,6 +30,7 @@ const INPUT_FILES: &[&str] = &[
     "ExcelBinOutput/AvatarExcelConfigData.json",
     "ExcelBinOutput/AvatarSkillDepotExcelConfigData.json",
     "ExcelBinOutput/AvatarSkillExcelConfigData.json",
+    "ExcelBinOutput/AchievementExcelConfigData.json",
     "ExcelBinOutput/BeyondHallFacilityExcelConfigData.json",
     "ExcelBinOutput/BydMaterialExcelConfigData.json",
     "ExcelBinOutput/ConstValueExcelConfigData.json",
@@ -117,6 +118,7 @@ struct Database {
     affix_map: HashMap<u32, Affix>,
     artifact_map: HashMap<u32, Artifact>,
     character_map: HashMap<u32, String>,
+    known_achievement_ids: HashSet<u32>,
     known_item_ids: HashSet<u32>,
     material_map: HashMap<u32, String>,
     property_map: HashMap<u32, Property>,
@@ -341,7 +343,7 @@ mod excel {
     }
 
     #[derive(Debug, Deserialize)]
-    pub struct ItemId {
+    pub struct IdEntry {
         #[serde(default)]
         pub id: u32,
     }
@@ -410,6 +412,7 @@ fn load_database(data_dir: &Path) -> io::Result<Database> {
     let weapon_map = fetch_weapon_map(data_dir, &text_map)?;
     let material_map = fetch_material_map(data_dir, &text_map)?;
     let character_map = fetch_character_map(data_dir, &text_map)?;
+    let known_achievement_ids = fetch_known_achievement_ids(data_dir)?;
     let known_item_ids = fetch_known_item_ids(data_dir)?;
     let skill_element_map = fetch_skill_element_map(data_dir)?;
     let skill_type_map = fetch_skill_type_map(data_dir)?;
@@ -426,6 +429,7 @@ fn load_database(data_dir: &Path) -> io::Result<Database> {
         affix_map,
         artifact_map,
         character_map,
+        known_achievement_ids,
         known_item_ids,
         material_map,
         property_map,
@@ -516,7 +520,7 @@ fn fetch_material_map(
 fn fetch_known_item_ids(data_dir: &Path) -> io::Result<HashSet<u32>> {
     let mut ids = HashSet::new();
     for relative in ITEM_ID_FILES {
-        let entries: Vec<excel::ItemId> = read_json(data_dir, relative)?;
+        let entries: Vec<excel::IdEntry> = read_json(data_dir, relative)?;
         ids.extend(
             entries
                 .into_iter()
@@ -525,6 +529,16 @@ fn fetch_known_item_ids(data_dir: &Path) -> io::Result<HashSet<u32>> {
         );
     }
     Ok(ids)
+}
+
+fn fetch_known_achievement_ids(data_dir: &Path) -> io::Result<HashSet<u32>> {
+    let entries: Vec<excel::IdEntry> =
+        read_json(data_dir, "ExcelBinOutput/AchievementExcelConfigData.json")?;
+    Ok(entries
+        .into_iter()
+        .map(|entry| entry.id)
+        .filter(|id| *id != 0)
+        .collect())
 }
 
 fn fetch_property_map(data_dir: &Path) -> io::Result<HashMap<u32, Property>> {

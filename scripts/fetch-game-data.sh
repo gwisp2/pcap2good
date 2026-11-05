@@ -13,6 +13,7 @@ files=(
     "ExcelBinOutput/AvatarExcelConfigData.json"
     "ExcelBinOutput/AvatarSkillDepotExcelConfigData.json"
     "ExcelBinOutput/AvatarSkillExcelConfigData.json"
+    "ExcelBinOutput/AchievementExcelConfigData.json"
     "ExcelBinOutput/BeyondHallFacilityExcelConfigData.json"
     "ExcelBinOutput/BydMaterialExcelConfigData.json"
     "ExcelBinOutput/ConstValueExcelConfigData.json"

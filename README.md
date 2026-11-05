@@ -3,7 +3,8 @@
 Offline counterpart to [Irminsul](https://github.com/konkers/irminsul): instead of
 sniffing live game traffic, it reads a packet capture from disk and prints the
 player's characters, weapons and artifacts as [GOOD](https://frzyc.github.io/genshin-optimizer/#/doc)
-v3 data, on stdout or in a file.
+v3 data, on stdout or in a file. Completed achievements are extracted separately
+and can be written to their own JSON file.
 
 ```console
 $ pcap2good decode path/to/capture.pcap
@@ -18,13 +19,21 @@ $ pcap2good decode path/to/capture.pcap
 }
 ```
 
-Unless `--out` is used, only the JSON document is written to stdout. Progress,
+Unless `--out` is used, only the GOOD JSON document is written to stdout. Progress,
 warnings and errors go to stderr, so the output can be piped or redirected:
 
 ```console
 $ pcap2good decode capture.pcap --out good.json
 $ pcap2good decode capture.pcap > good.json
 $ pcap2good decode capture.pcap | jq '.artifacts | length'
+$ pcap2good decode capture.pcap --achievements achievements.json
+```
+
+The achievements file uses the format accepted by stardb.gg's importer and
+contains only finished or claimed achievements:
+
+```json
+{ "gi_achievements": [80001, 80002, 80005] }
 ```
 
 When the capture contains a player property update, the player's Mora balance is
@@ -61,12 +70,15 @@ update that file from upstream Irminsul and rebuild.
 | Option | Description |
 | --- | --- |
 | `-o`, `--out <FILE>` | Write the GOOD data to `<FILE>` instead of stdout |
+| `--achievements <FILE>` | Write completed achievements to `<FILE>` in stardb.gg import format |
 | `--fake-initialize-4th-line` | Pretend unactivated fourth substats have already rolled |
 | `--compact` | Single-line JSON instead of indented JSON |
 | `--dump-commands <DIR>` | Write every decoded command to a directory as `<NNNN>-<id>.bin` and `<NNNN>-<id>.json` (for debugging) |
 | `-v`, `-vv`, `-vvv` | Info, debug and trace logging on stderr |
 
 Every character, artifact, weapon and material in the capture is exported.
+Completed achievements are never part of the GOOD document; they are only
+written to the file passed to `--achievements`.
 
 With `--dump-commands`, every command produces two files: the raw payload as
 `<NNNN>-<id>.bin` and a schema-less JSON rendering as `<NNNN>-<id>.json`.
@@ -150,12 +162,12 @@ $ ./scripts/fetch-game-data.ps1              # or .sh on other platforms
 $ cargo build --release
 ```
 
-The script downloads only the 17 files the build reads (about 36 MB); a full
+The script downloads only the 18 files the build reads (about 37 MB); a full
 AnimeGameData checkout moved or linked to `3rdparty/AnimeGameData` works too.
 
-The build reads names, artifact sets, affixes, item ids and related tables from
-the data directory and embeds them in the binary, so decoding itself works
-fully offline. The item-id set covers every item-bearing Excel config
+The build reads names, artifact sets, affixes, item ids, achievement ids and
+related tables from the data directory and embeds them in the binary, so
+decoding itself works fully offline. The item-id set covers every item-bearing Excel config
 (materials, weapons, artifacts, furniture, TPS weapons, Beyond materials,
 Beyond hall facilities and display items). The directory is gitignored; update
 it and rebuild when the game data changes.
@@ -171,7 +183,8 @@ $ cargo test
 A static browser front end lives in [`web/`](web). It runs the decoder in a Web
 Worker via WebAssembly, so the capture never leaves the machine and the page can
 be served from any static file host. The **How to make a capture?** button under
-the drop zone opens `web/guide.png` in a pan and zoom viewer.
+the drop zone opens `web/guide.png` in a pan and zoom viewer. Completed
+achievements can be downloaded separately as a stardb-compatible JSON file.
 
 ```console
 # The CLI version must match the wasm-bindgen crate in Cargo.lock.
@@ -199,10 +212,12 @@ A native desktop front end lives in [`gui/`](gui). It calls
 involved. The start screen offers **Open capture file** and a disabled **Live
 capture** placeholder. Choosing a capture starts decoding immediately; the app
 shows a centered `Decoding...` label, then a compact summary of the decoded
-characters, artifacts, weapons, items, Mora and flows together with any warnings
-and a large **Export GOOD** button. Capture files can also be dropped on the
-window, and a small option below the buttons enables the fourth-substat
-workaround. Keyboard shortcuts: `Ctrl+O` open, `Ctrl+S` export.
+characters, artifacts, weapons, items, Mora and achievements together with any
+warnings and a large **Export GOOD** button. When the capture contains completed
+achievements, a separate **Export achievements** button appears. Capture files
+can also be dropped on the window, and a small option below the buttons enables
+the fourth-substat workaround. Keyboard shortcuts: `Ctrl+O` open, `Ctrl+S`
+export.
 
 ```console
 # Run without a capture pre-selected:
@@ -247,7 +262,7 @@ Nothing generated or machine-specific is committed: `3rdparty/`, `target/`,
 - Reads a capture file instead of capturing live traffic; no admin/root rights
   and no Npcap/pktmon dependency to decode.
 - Command line plus a static in-browser (WASM) front end and a native egui
-  desktop app; no live capture, update checker, achievements or wish history.
+  desktop app; no live capture, update checker or wish history.
 - Handles `.pcap` and `.pcapng` files with legacy pcap and pcapng sections.
 
 ## License

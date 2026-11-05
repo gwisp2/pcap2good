@@ -193,6 +193,30 @@ fn avatar_list_with_field(field_number: u32, avatars: &[AvatarInfo]) -> Vec<u8> 
     message_list_with_field(field_number, avatars)
 }
 
+fn write_varint_field(out: &mut Vec<u8>, field_number: u32, value: u64) {
+    write_varint(out, u64::from(field_number) << 3);
+    write_varint(out, value);
+}
+
+fn achievement_entry(id: u32, status: u32, finish_timestamp: Option<u32>) -> Vec<u8> {
+    let mut entry = Vec::new();
+    if let Some(timestamp) = finish_timestamp {
+        write_varint_field(&mut entry, 4, u64::from(timestamp));
+    }
+    write_varint_field(&mut entry, 7, u64::from(status));
+    write_varint_field(&mut entry, 8, 1);
+    write_varint_field(&mut entry, 9, u64::from(id));
+    entry
+}
+
+fn raw_list_with_field(field_number: u32, messages: &[Vec<u8>]) -> Vec<u8> {
+    let mut body = Vec::new();
+    for message in messages {
+        write_message_field(&mut body, field_number, message);
+    }
+    body
+}
+
 fn artifact_item() -> Item {
     let reliquary = Reliquary {
         level: 20,
@@ -794,6 +818,78 @@ fn later_item_updates_do_not_replace_the_inventory() {
     assert_eq!(outcome.good.artifacts.len(), 1);
     assert_eq!(outcome.good.weapons.len(), 1);
     assert!(outcome.good.materials.contains_key("Sunsettia"));
+}
+
+fn achievement_frames() -> Vec<Vec<u8>> {
+    let entries: Vec<Vec<u8>> = (0..12)
+        .map(|index| {
+            let status = match index {
+                0 => 3,
+                1 => 2,
+                _ => 1,
+            };
+            let finish_timestamp = (status >= 2).then_some(1_700_000_000 + index as u32);
+            achievement_entry(80001 + index as u32, status, finish_timestamp)
+        })
+        .collect();
+    let body = raw_list_with_field(9, &entries);
+    vec![handshake_frame(40000), content_frame(4164, body)]
+}
+
+#[test]
+fn achievement_packet_is_detected_by_content() {
+    let frames = achievement_frames();
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.achievements.gi_achievements, vec![80001, 80002]);
+    assert_eq!(outcome.flows[0].stats.achievement_packets, 1);
+    assert_eq!(outcome.flows[0].achievements.achievements.len(), 12);
+    assert!(outcome.warnings.is_empty());
+}
+
+#[test]
+fn achievement_list_with_unknown_ids_is_ignored() {
+    let entries: Vec<Vec<u8>> = (0..12)
+        .map(|index| achievement_entry(1_000_000 + index, 3, Some(1_700_000_000 + index)))
+        .collect();
+    let body = raw_list_with_field(9, &entries);
+    let frames = vec![handshake_frame(40000), content_frame(4164, body)];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert!(outcome.achievements.gi_achievements.is_empty());
+    assert_eq!(outcome.flows[0].stats.achievement_packets, 0);
+}
+
+#[test]
+fn cli_writes_achievements_to_a_separate_file() {
+    let capture = temp_capture("achievements", &achievement_frames());
+    let out = std::env::temp_dir().join(format!(
+        "pcap2good-it-{}-achievements.json",
+        std::process::id()
+    ));
+    fs::remove_file(&out).ok();
+
+    let output = run_cli(&capture, &["--achievements", out.to_str().unwrap()]);
+    fs::remove_file(&capture).ok();
+
+    assert!(
+        output.status.success(),
+        "decode failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let achievements: serde_json::Value = serde_json::from_slice(&fs::read(&out).unwrap())
+        .unwrap_or_else(|error| panic!("achievements file is not JSON: {error}"));
+    fs::remove_file(&out).ok();
+    assert_eq!(
+        achievements["gi_achievements"],
+        serde_json::json!([80001, 80002])
+    );
 }
 
 #[test]

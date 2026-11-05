@@ -10,6 +10,9 @@ const dropSubtitle = document.querySelector("#drop-subtitle");
 const fake4thLine = document.querySelector("#fake-4th-line");
 const decodeButton = document.querySelector("#decode-button");
 const downloadButton = document.querySelector("#download-button");
+const downloadAchievementsButton = document.querySelector(
+  "#download-achievements-button",
+);
 const status = document.querySelector("#status");
 const result = document.querySelector("#result");
 const stats = document.querySelector("#stats");
@@ -69,6 +72,19 @@ downloadButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+downloadAchievementsButton.addEventListener("click", () => {
+  if (!report?.achievements) return;
+
+  const json = JSON.stringify(report.achievements, null, 2);
+  const blob = new Blob([json, "\n"], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${selectedFile.name.replace(/\.(pcapng|pcap)$/i, "")}.achievements.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
 worker.addEventListener("message", (event) => {
   const message = event.data;
   if (!message.ok) {
@@ -110,6 +126,7 @@ function startDecode(file) {
   report = null;
   result.hidden = true;
   downloadButton.hidden = true;
+  downloadAchievementsButton.hidden = true;
   output.textContent = "";
   status.classList.remove("error");
   status.textContent = `Decoding ${file.name} (${formatBytes(file.size)})…`;
@@ -153,6 +170,10 @@ function render(data) {
 
   renderExtracted(data);
 
+  const achievementCount = data.achievements?.gi_achievements?.length ?? 0;
+  downloadAchievementsButton.hidden = achievementCount === 0;
+  downloadAchievementsButton.textContent = `Download achievements (${achievementCount})`;
+
   warningList.replaceChildren(
     ...data.warnings.map((warning) => {
       const item = document.createElement("li");
@@ -195,6 +216,10 @@ function renderExtracted(data) {
     { label: "Weapons", count: data.good.weapons.length },
     { label: "Items", count: itemNames.length, unit: "type" },
     { label: "Mora", count: mora, format: "number" },
+    {
+      label: "Achievements",
+      count: data.achievements?.gi_achievements?.length ?? 0,
+    },
   ];
 
   extractList.replaceChildren(

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
+use crate::achievements::AchievementStore;
 use crate::good::Good;
 
 use super::command::{CommandFramer, DirectedCommand, is_compressed};
@@ -49,6 +50,7 @@ pub struct FlowStats {
     pub item_packets: u64,
     pub avatar_packets: u64,
     pub player_prop_packets: u64,
+    pub achievement_packets: u64,
     pub handshakes: u64,
     pub compressed_commands: u64,
     pub decryption_failures: u64,
@@ -63,6 +65,7 @@ pub struct FlowOutcome {
     pub first_seen: Timestamp,
     pub last_seen: Timestamp,
     pub good: Good,
+    pub achievements: AchievementStore,
     pub stats: FlowStats,
     pub images: ImageStore,
     pub warnings: Vec<Warning>,
@@ -167,6 +170,7 @@ impl FlowHandler for FlowPipeline {
             .data
             .export_genshin_optimizer(&self.shared.export_settings);
         let images = self.router.sinks.images.store;
+        let achievements = std::mem::take(&mut self.router.sinks.achievements.store);
 
         FlowOutcome {
             id: self.id,
@@ -174,6 +178,7 @@ impl FlowHandler for FlowPipeline {
             first_seen: self.first_seen,
             last_seen: self.last_seen,
             good,
+            achievements,
             stats: self.stats,
             images,
             warnings: Vec::new(),

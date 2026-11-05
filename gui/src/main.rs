@@ -26,6 +26,7 @@ enum Status {
     Decoded(Duration),
     Error(String),
     Saved,
+    SavedAchievements,
 }
 
 struct Pcap2GoodApp {
@@ -151,6 +152,44 @@ impl Pcap2GoodApp {
         }
     }
 
+    fn save_achievements_dialog(&mut self) {
+        let Some(outcome) = &self.outcome else {
+            return;
+        };
+        if outcome.achievements.gi_achievements.is_empty() {
+            return;
+        }
+
+        let suggested = self
+            .selected
+            .as_ref()
+            .and_then(|path| path.file_stem())
+            .map(|stem| format!("{}.achievements.json", stem.to_string_lossy()))
+            .unwrap_or_else(|| "achievements.json".to_owned());
+        let contents = match serde_json::to_string_pretty(&outcome.achievements) {
+            Ok(contents) => format!("{contents}\n"),
+            Err(error) => {
+                self.status = Status::Error(format!("Failed to encode achievements: {error}"));
+                return;
+            }
+        };
+
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Save achievements")
+            .add_filter("Achievements JSON", &["json"])
+            .set_file_name(suggested)
+            .save_file()
+        {
+            match std::fs::write(&path, contents) {
+                Ok(()) => self.status = Status::SavedAchievements,
+                Err(error) => {
+                    self.status =
+                        Status::Error(format!("Failed to write {}: {error}", path.display()));
+                }
+            }
+        }
+    }
+
     fn start_decode(&mut self, ctx: &egui::Context) {
         if self.is_decoding() {
             return;
@@ -259,6 +298,7 @@ impl Pcap2GoodApp {
             }
             Status::Error(message) => (message.clone(), ERROR),
             Status::Saved => ("Saved GOOD JSON.".to_owned(), OK),
+            Status::SavedAchievements => ("Saved achievements.".to_owned(), OK),
         }
     }
 
@@ -405,6 +445,23 @@ impl eframe::App for Pcap2GoodApp {
                     self.save_dialog();
                 }
 
+                let achievement_count = self
+                    .outcome
+                    .as_ref()
+                    .map(|outcome| outcome.achievements.gi_achievements.len())
+                    .unwrap_or_default();
+                if achievement_count > 0 {
+                    ui.add_space(4.0);
+                    ui.vertical_centered(|ui| {
+                        let achievements =
+                            egui::Button::new(format!("Export achievements ({achievement_count})"))
+                                .small();
+                        if ui.add(achievements).clicked() {
+                            self.save_achievements_dialog();
+                        }
+                    });
+                }
+
                 let (text, color) = self.status_info();
                 let hint = text.clone();
                 ui.add_space(4.0);
@@ -464,7 +521,10 @@ fn summary_grid(ui: &mut egui::Ui, outcome: &DecodeOutcome) {
         ("Weapons", outcome.good.weapons.len().to_string()),
         ("Items", items),
         ("Mora", mora.to_string()),
-        ("Flows", outcome.flows.len().to_string()),
+        (
+            "Achievements",
+            outcome.achievements.gi_achievements.len().to_string(),
+        ),
     ];
 
     egui::Grid::new("summary-grid")

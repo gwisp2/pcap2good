@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use serde::Serialize;
 
+use crate::achievements::{AchievementExport, AchievementStore};
 use crate::capture::{self, CaptureStats};
 use crate::decode::{DecodeResult, DecodeStats, Decoder};
 use crate::good::Good;
@@ -19,6 +20,7 @@ pub struct DecodeOutcome {
     pub good: Good,
     pub capture: CaptureStats,
     pub decode: DecodeStats,
+    pub achievements: AchievementExport,
     pub warnings: Vec<Warning>,
     /// The flow whose data is exposed through `good`.
     pub selected_flow: Option<FlowId>,
@@ -74,6 +76,7 @@ fn finish(result: DecodeResult) -> DecodeOutcome {
         .map(|flow| flow.good.clone())
         .unwrap_or_else(Good::empty);
     let selected_stats = selected.map(|flow| flow.stats).unwrap_or_default();
+    let selected_flow = selected.map(|flow| flow.id);
 
     let mut warnings = warnings(&selected_stats);
     if flows.len() > 1 {
@@ -87,12 +90,24 @@ fn finish(result: DecodeResult) -> DecodeOutcome {
         ));
     }
 
+    let mut achievement_store = AchievementStore::default();
+    for flow in &flows {
+        achievement_store.merge(&flow.achievements.achievements);
+    }
+    let achievements = AchievementExport::from_store(&achievement_store);
+    if !achievements.gi_achievements.is_empty() {
+        // Achievements are player data too; an achievement-only capture is not
+        // a failed decode.
+        warnings.retain(|warning| !matches!(warning.code, WarningCode::NoPlayerData));
+    }
+
     DecodeOutcome {
         good,
         capture,
         decode,
+        achievements,
         warnings,
-        selected_flow: selected.map(|flow| flow.id),
+        selected_flow,
         flows,
     }
 }
@@ -107,7 +122,7 @@ fn has_player_data(flow: &FlowOutcome) -> bool {
 }
 
 fn warnings(stats: &FlowStats) -> Vec<Warning> {
-    if stats.item_packets != 0 || stats.avatar_packets != 0 {
+    if stats.item_packets != 0 || stats.avatar_packets != 0 || stats.achievement_packets != 0 {
         return Vec::new();
     }
 

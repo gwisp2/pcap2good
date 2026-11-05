@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tracing::warn;
 
+use crate::achievements::{AchievementStore, matches_achievement_packet};
 use crate::auto_artifactarium::r#gen::protos::{AvatarInfo, Item};
 use crate::auto_artifactarium::unk_util::{
     matches_avatars_all_data_notify, matches_items_all_data_notify, matches_player_prop_map,
@@ -73,6 +74,40 @@ fn matches_player_data_packet(
     command: &DirectedCommand,
 ) -> Option<std::collections::HashMap<u32, i64>> {
     matches_player_prop_map(&command.command.body)
+}
+
+pub struct AchievementSink {
+    game_data: Arc<GameData>,
+    pub store: AchievementStore,
+}
+
+impl AchievementSink {
+    pub fn new(game_data: Arc<GameData>) -> Self {
+        Self {
+            game_data,
+            store: AchievementStore::default(),
+        }
+    }
+}
+
+impl CommandSink for AchievementSink {
+    fn on_command(&mut self, command: &DirectedCommand, stats: &mut FlowStats) {
+        if let Some(achievements) =
+            matches_achievement_packet(&command.command.body, &self.game_data)
+        {
+            // The stardb import format only accepts achievements it knows.
+            let achievements: Vec<_> = achievements
+                .into_iter()
+                .filter(|achievement| self.game_data.is_known_achievement_id(achievement.id))
+                .collect();
+            self.store.merge(&achievements);
+            stats.achievement_packets += 1;
+        }
+    }
+
+    fn on_control(&mut self, _control: &FlowControl, _stats: &mut FlowStats) {}
+
+    fn finish(&mut self) {}
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -153,6 +188,7 @@ impl CommandSink for CommandDumpSink {
 
 pub struct FlowSinks {
     pub player: PlayerDataSink,
+    pub achievements: AchievementSink,
     pub images: ImageSink,
     pub dump: Option<CommandDumpSink>,
     pub extra: Vec<Box<dyn CommandSink>>,
@@ -169,6 +205,7 @@ impl CommandRouter {
 
     pub fn on_command(&mut self, command: &DirectedCommand, stats: &mut FlowStats) {
         self.sinks.player.on_command(command, stats);
+        self.sinks.achievements.on_command(command, stats);
         self.sinks.images.on_command(command, stats);
         if let Some(dump) = &mut self.sinks.dump {
             dump.on_command(command, stats);
@@ -191,6 +228,7 @@ impl CommandRouter {
 
     pub fn finish(&mut self) {
         self.sinks.player.finish();
+        self.sinks.achievements.finish();
         self.sinks.images.finish();
         if let Some(dump) = &mut self.sinks.dump {
             dump.finish();
@@ -213,6 +251,7 @@ impl FlowSinkFactory for DefaultFlowSinkFactory {
     fn create(&self, _flow: FlowId, _key: &FlowKey, shared: &SharedContext) -> FlowSinks {
         FlowSinks {
             player: PlayerDataSink::new(shared.game_data.clone()),
+            achievements: AchievementSink::new(shared.game_data.clone()),
             images: ImageSink::default(),
             dump: self.dump.clone().map(CommandDumpSink::new),
             extra: Vec::new(),
