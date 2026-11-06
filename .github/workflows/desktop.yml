@@ -1,0 +1,78 @@
+name: Build desktop app
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      asset: ${{ steps.package.outputs.asset }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gui -> target
+
+      - name: Fetch game data
+        shell: pwsh
+        run: ./scripts/fetch-game-data.ps1
+
+      - name: Build desktop app
+        run: cargo build --release --locked --manifest-path gui/Cargo.toml
+
+      - name: Rename executable with version
+        id: package
+        shell: pwsh
+        env:
+          VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          $version = ($env:VERSION -replace '[^0-9A-Za-z._-]', '-').Trim('-')
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Could not determine a version from the current ref."
+          }
+
+          $asset = "pcap2good-gui-$version.exe"
+          Copy-Item -Path gui/target/release/pcap2good-gui.exe -Destination $asset
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "asset=$asset" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcap2good-gui-${{ steps.package.outputs.version }}
+          path: ${{ steps.package.outputs.asset }}
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pcap2good-gui-${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release upload "${{ github.event.release.tag_name }}"
+          "dist/${{ needs.build.outputs.asset }}"
+          --repo "${{ github.repository }}" --clobber

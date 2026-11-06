@@ -251,6 +251,10 @@ Build a release binary with:
 $ cargo build --release --manifest-path gui/Cargo.toml
 ```
 
+Windows x64 release builds are produced by the
+[desktop workflow](.github/workflows/desktop.yml) and attached to GitHub
+releases as `pcap2good-gui-<tag>.exe` when a release is published.
+
 The app uses `eframe`/`egui` for rendering and `rfd` for native file dialogs.
 It needs an OpenGL-capable desktop; on Linux that means X11 or Wayland (the file
 dialogs use the XDG desktop portal). Live capture is Windows-only; on other
