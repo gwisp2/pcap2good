@@ -11,7 +11,7 @@ use crate::good::Good;
 use super::command::{CommandFramer, DirectedCommand, is_compressed};
 use super::crypto::{CommandDecryptor, DecryptOutput};
 use super::kcp::{KcpMessage, KcpReassembler};
-use super::sink::{CommandRouter, FlowSinkFactory, FlowSinks, ImageStore};
+use super::sink::{CommandRouter, FlowSinkFactory, FlowSinks};
 use super::udp::{ClassifiedDatagram, ConnectionEvent, DatagramKind, Direction, FlowKey};
 use super::{DiagnosticSink, SharedContext, Timestamp, Warning};
 
@@ -67,7 +67,6 @@ pub struct FlowOutcome {
     pub good: Good,
     pub achievements: AchievementStore,
     pub stats: FlowStats,
-    pub images: ImageStore,
     pub warnings: Vec<Warning>,
 }
 
@@ -169,7 +168,6 @@ impl FlowHandler for FlowPipeline {
             .player
             .data
             .export_genshin_optimizer(&self.shared.export_settings);
-        let images = self.router.sinks.images.store;
         let achievements = std::mem::take(&mut self.router.sinks.achievements.store);
 
         FlowOutcome {
@@ -180,7 +178,6 @@ impl FlowHandler for FlowPipeline {
             good,
             achievements,
             stats: self.stats,
-            images,
             warnings: Vec::new(),
         }
     }
@@ -208,7 +205,6 @@ impl FlowPipeline {
                 .export_genshin_optimizer(&self.shared.export_settings),
             achievements: self.router.sinks.achievements.store.clone(),
             stats,
-            images: self.router.sinks.images.store.clone(),
             warnings: Vec::new(),
         }
     }

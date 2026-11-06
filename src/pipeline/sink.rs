@@ -8,7 +8,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use serde::Serialize;
 use tracing::warn;
 
 use crate::achievements::{AchievementStore, matches_achievement_packet};
@@ -110,30 +109,6 @@ impl CommandSink for AchievementSink {
     fn finish(&mut self) {}
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct ImageBuffer {
-    pub index: u32,
-    pub bytes: Vec<u8>,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct ImageStore {
-    pub buffers: Vec<ImageBuffer>,
-}
-
-#[derive(Default)]
-pub struct ImageSink {
-    pub store: ImageStore,
-}
-
-impl CommandSink for ImageSink {
-    fn on_command(&mut self, _command: &DirectedCommand, _stats: &mut FlowStats) {}
-
-    fn on_control(&mut self, _control: &FlowControl, _stats: &mut FlowStats) {}
-
-    fn finish(&mut self) {}
-}
-
 pub struct DumpState {
     pub dir: PathBuf,
     pub counter: u64,
@@ -189,7 +164,6 @@ impl CommandSink for CommandDumpSink {
 pub struct FlowSinks {
     pub player: PlayerDataSink,
     pub achievements: AchievementSink,
-    pub images: ImageSink,
     pub dump: Option<CommandDumpSink>,
     pub extra: Vec<Box<dyn CommandSink>>,
 }
@@ -206,7 +180,6 @@ impl CommandRouter {
     pub fn on_command(&mut self, command: &DirectedCommand, stats: &mut FlowStats) {
         self.sinks.player.on_command(command, stats);
         self.sinks.achievements.on_command(command, stats);
-        self.sinks.images.on_command(command, stats);
         if let Some(dump) = &mut self.sinks.dump {
             dump.on_command(command, stats);
         }
@@ -217,7 +190,6 @@ impl CommandRouter {
 
     pub fn on_control(&mut self, control: &FlowControl, stats: &mut FlowStats) {
         self.sinks.player.on_control(control, stats);
-        self.sinks.images.on_control(control, stats);
         if let Some(dump) = &mut self.sinks.dump {
             dump.on_control(control, stats);
         }
@@ -229,7 +201,6 @@ impl CommandRouter {
     pub fn finish(&mut self) {
         self.sinks.player.finish();
         self.sinks.achievements.finish();
-        self.sinks.images.finish();
         if let Some(dump) = &mut self.sinks.dump {
             dump.finish();
         }
@@ -252,7 +223,6 @@ impl FlowSinkFactory for DefaultFlowSinkFactory {
         FlowSinks {
             player: PlayerDataSink::new(shared.game_data.clone()),
             achievements: AchievementSink::new(shared.game_data.clone()),
-            images: ImageSink::default(),
             dump: self.dump.clone().map(CommandDumpSink::new),
             extra: Vec::new(),
         }
