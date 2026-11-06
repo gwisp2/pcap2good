@@ -4,13 +4,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use base64::prelude::*;
-use pcap2good::auto_artifactarium::r#gen::protos::{
+use pcap2good_core::auto_artifactarium::r#gen::protos::{
     AvatarDataNotify, AvatarInfo, Equip, Item, Material, PacketWithItems, PropMapEntry, PropValue,
     Reliquary, Weapon, equip, item,
 };
-use pcap2good::decode::Decoder;
-use pcap2good::pipeline::{CapturedFrame, LinkType, Timestamp};
-use pcap2good::player_data::PROP_PLAYER_SCOIN;
+use pcap2good_core::decode::Decoder;
+use pcap2good_core::pipeline::{CapturedFrame, LinkType, Timestamp};
+use pcap2good_core::player_data::PROP_PLAYER_SCOIN;
 use protobuf::Message;
 
 const ETHERNET_HEADER_LEN: usize = 14;
@@ -30,7 +30,7 @@ const WEAPON_GUID: u64 = 2;
 
 fn encryption_key() -> Vec<u8> {
     let keys: BTreeMap<String, String> =
-        serde_json::from_slice(include_bytes!("../keys/gi.json")).unwrap();
+        serde_json::from_slice(include_bytes!("../../core/keys/gi.json")).unwrap();
     let encoded = keys.values().next().expect("at least one key");
     BASE64_STANDARD.decode(encoded).unwrap()
 }
@@ -457,7 +457,7 @@ fn live_snapshot_updates_without_finishing_the_decoder() {
         });
     }
 
-    let snapshot = pcap2good::snapshot_outcome(decoder.snapshot());
+    let snapshot = pcap2good_core::snapshot_outcome(decoder.snapshot());
     assert_eq!(snapshot.capture.packets, frames.len() as u64);
     assert_eq!(snapshot.decode.commands, 3);
     assert_eq!(snapshot.good.characters.len(), 1);
@@ -467,7 +467,7 @@ fn live_snapshot_updates_without_finishing_the_decoder() {
     assert_eq!(snapshot.good.materials["Mora"], 123_456);
 
     // Snapshotting is non-consuming, so another update still sees the data.
-    let later = pcap2good::snapshot_outcome(decoder.snapshot());
+    let later = pcap2good_core::snapshot_outcome(decoder.snapshot());
     assert_eq!(later.good.characters.len(), 1);
     assert_eq!(later.capture.packets, frames.len() as u64);
 
@@ -706,7 +706,7 @@ fn avatar_data_is_detected_by_content_not_command_id() {
     ];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.good.characters.len(), 1);
@@ -732,7 +732,7 @@ fn avatar_field_with_an_out_of_range_id_is_not_used() {
     ];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert!(outcome.good.characters.is_empty());
@@ -761,7 +761,7 @@ fn character_items_are_not_mistaken_for_avatar_lists() {
     ];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert!(outcome.good.characters.is_empty());
@@ -774,7 +774,7 @@ fn item_data_is_detected_by_content_not_command_id() {
     let frames = vec![handshake_frame(40000), content_frame(4242, body)];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows[0].stats.item_packets, 1);
@@ -788,7 +788,7 @@ fn item_list_with_fewer_than_ten_items_is_ignored() {
     let frames = vec![handshake_frame(40000), content_frame(4242, body)];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows[0].stats.item_packets, 0);
@@ -805,7 +805,7 @@ fn item_list_with_too_many_unknown_ids_is_ignored() {
     let frames = vec![handshake_frame(40000), content_frame(4242, body)];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows[0].stats.item_packets, 0);
@@ -821,7 +821,7 @@ fn item_list_at_ninety_percent_known_is_accepted() {
     let frames = vec![handshake_frame(40000), content_frame(4242, body)];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows[0].stats.item_packets, 1);
@@ -847,7 +847,7 @@ fn later_item_updates_do_not_replace_the_inventory() {
     ];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows[0].stats.item_packets, 2);
@@ -876,7 +876,7 @@ fn achievement_frames() -> Vec<Vec<u8>> {
 fn achievement_packet_is_detected_by_content() {
     let frames = achievement_frames();
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.achievements.gi_achievements, vec![80001, 80002]);
@@ -894,7 +894,7 @@ fn achievement_list_with_unknown_ids_is_ignored() {
     let frames = vec![handshake_frame(40000), content_frame(4164, body)];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert!(outcome.achievements.gi_achievements.is_empty());
@@ -938,7 +938,7 @@ fn multiple_flows_are_decoded_independently() {
     ];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);
@@ -949,7 +949,7 @@ fn multiple_flows_are_decoded_independently() {
     assert_eq!(outcome.flows[1].good.characters[0].level, 80);
     assert!(outcome.warnings.iter().any(|warning| matches!(
         warning.code,
-        pcap2good::WarningCode::MultipleFlows { count: 2 }
+        pcap2good_core::WarningCode::MultipleFlows { count: 2 }
     )));
 }
 
@@ -963,7 +963,7 @@ fn reconnecting_on_the_same_flow_key_starts_a_new_session() {
     ];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);
@@ -981,7 +981,7 @@ fn selects_the_first_flow_with_player_data() {
     ];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);
@@ -990,7 +990,7 @@ fn selects_the_first_flow_with_player_data() {
     assert_eq!(outcome.good.characters[0].level, 80);
     assert!(!outcome.warnings.iter().any(|warning| matches!(
         warning.code,
-        pcap2good::WarningCode::MultipleFlows { .. }
+        pcap2good_core::WarningCode::MultipleFlows { .. }
     )));
 }
 
@@ -999,13 +999,13 @@ fn multiple_flows_without_player_data_do_not_warn() {
     let frames = vec![handshake_frame(40000), handshake_frame(40001)];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);
     assert!(!outcome.warnings.iter().any(|warning| matches!(
         warning.code,
-        pcap2good::WarningCode::MultipleFlows { .. }
+        pcap2good_core::WarningCode::MultipleFlows { .. }
     )));
 }
 
@@ -1019,7 +1019,7 @@ fn handshake_on_one_flow_does_not_reset_another_flow() {
     ];
 
     let outcome =
-        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+        pcap2good_core::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
             .unwrap();
 
     assert_eq!(outcome.flows.len(), 2);

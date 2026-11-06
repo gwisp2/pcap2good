@@ -13,8 +13,8 @@ try {
 
     & (Join-Path $root "scripts/fetch-game-data.ps1")
 
-    cargo build --release --target wasm32-unknown-unknown --lib
-    wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good.wasm `
+    cargo build --release --target wasm32-unknown-unknown -p pcap2good-core --lib
+    wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good_core.wasm `
         --target web --out-dir web/pkg --out-name pcap2good
 
     Write-Host "Built web/pkg. Serve it with: python -m http.server 8000 -d web"

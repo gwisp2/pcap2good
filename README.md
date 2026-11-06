@@ -67,7 +67,7 @@ Linux "cooked" link type; that is supported, as are ordinary Ethernet captures,
 pcapng files, raw IP and BSD loopback captures.
 
 Decryption starts from a table of dispatch keys. Those keys live in
-[`keys/gi.json`](keys/gi.json) and are the same table Irminsul ships. If a
+[`core/keys/gi.json`](core/keys/gi.json) and are the same table Irminsul ships. If a
 capture cannot be decrypted (for example after the game rotates its keys),
 update that file from upstream Irminsul and rebuild.
 
@@ -138,26 +138,33 @@ response is not compressed decode normally.
 
 ## Packet pipeline
 
-The packet pipeline lives in [`src/pipeline`](src/pipeline). It splits the
+The packet pipeline lives in [`core/src/pipeline`](core/src/pipeline). It splits the
 capture into link-layer, UDP, KCP, decryption, command-framing and consumer
 stages, and keeps separate state for every game flow found in a capture.
 
 The upstream [`auto-artifactarium`] crate is not used as a dependency. Some of
 its low-level pieces are partially embedded in the
-[`auto_artifactarium`](src/auto_artifactarium) module instead: the generated
+[`auto_artifactarium`](core/src/auto_artifactarium) module instead: the generated
 protobuf types and a few cryptographic/seed helpers adapted from upstream
 revision `abbbf7a3f58846512250a789a76be2d3cdb115c1` (v1.4.0). The pipeline,
 KCP handling and command framing are implemented here; player-data matching uses
 those embedded helpers.
 
 The protobuf definitions live in
-[`src/auto_artifactarium/protos.proto`](src/auto_artifactarium/protos.proto).
-`build.rs` regenerates the Rust bindings into `OUT_DIR` whenever that file
-changes, so `cargo build` / `cargo check` is all that is needed after editing it.
+[`core/src/auto_artifactarium/protos.proto`](core/src/auto_artifactarium/protos.proto).
+[`core/build.rs`](core/build.rs) regenerates the Rust bindings into `OUT_DIR`
+whenever that file changes, so `cargo build` / `cargo check` is all that is
+needed after editing it.
 
 ## Building
 
 Rust 1.88 or newer is required.
+
+The repository is a Cargo workspace with three packages:
+
+- `core/` — `pcap2good-core`, the decoder library
+- `cli/` — `pcap2good-cli`, the `pcap2good` command-line front end
+- `gui/` — `pcap2good-gui`, the desktop app
 
 The build needs one local dependency, which is not committed:
 [Dimbreath's AnimeGameData][anime-game-data] dump under `3rdparty/AnimeGameData`
@@ -165,7 +172,7 @@ The build needs one local dependency, which is not committed:
 
 ```console
 $ ./scripts/fetch-game-data.ps1              # or .sh on other platforms
-$ cargo build --release
+$ cargo build --release -p pcap2good-cli
 ```
 
 The script downloads only the 18 files the build reads (about 37 MB); a full
@@ -179,7 +186,8 @@ Beyond hall facilities and display items). The directory is gitignored; update
 it and rebuild when the game data changes.
 
 ```console
-$ cargo test
+$ cargo test --workspace
+$ cargo clippy --workspace --all-targets
 ```
 
 [anime-game-data]: https://gitlab.com/Dimbreath/animegamedata2
@@ -202,8 +210,8 @@ Open <http://localhost:8000>. On other platforms the build is:
 
 ```console
 $ ./scripts/fetch-game-data.sh
-$ cargo build --release --target wasm32-unknown-unknown --lib
-$ wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good.wasm \
+$ cargo build --release --target wasm32-unknown-unknown -p pcap2good-core --lib
+$ wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good_core.wasm \
       --target web --out-dir web/pkg --out-name pcap2good
 ```
 
@@ -236,19 +244,19 @@ logging in, because the login handshake is needed to derive the session key.
 
 ```console
 # Run without a capture pre-selected:
-$ cargo run --manifest-path gui/Cargo.toml
+$ cargo run -p pcap2good-gui
 
 # Or open a capture straight away:
-$ cargo run --manifest-path gui/Cargo.toml -- capture.pcap
+$ cargo run -p pcap2good-gui -- capture.pcap
 
 # Live capture prompts for administrator rights if needed:
-$ cargo run --manifest-path gui/Cargo.toml
+$ cargo run -p pcap2good-gui
 ```
 
 Build a release binary with:
 
 ```console
-$ cargo build --release --manifest-path gui/Cargo.toml
+$ cargo build --release -p pcap2good-gui
 ```
 
 Windows x64 release builds are produced by the
@@ -275,9 +283,9 @@ The site is served at `https://<user>.github.io/<repo>/`. The workflow fetches
 the pinned game data, installs the matching `wasm-bindgen-cli`, builds
 `web/pkg`, and deploys `web/`.
 
-Nothing generated or machine-specific is committed: `3rdparty/`, `target/`,
-`gui/target/` and `web/pkg/` are gitignored. If your default branch is neither
-`main` nor `master`, update the `on.push.branches` list in the workflow.
+Nothing generated or machine-specific is committed: `target/`, `3rdparty/` and
+`web/pkg/` are gitignored. If your default branch is neither `main` nor
+`master`, update the `on.push.branches` list in the workflow.
 
 ## Differences from Irminsul
 

@@ -23,15 +23,13 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: gui -> target
 
       - name: Fetch game data
         shell: pwsh
         run: ./scripts/fetch-game-data.ps1
 
       - name: Build desktop app
-        run: cargo build --release --locked --manifest-path gui/Cargo.toml
+        run: cargo build --release --locked -p pcap2good-gui
 
       - name: Rename executable with version
         id: package
@@ -45,7 +43,7 @@ jobs:
           }
 
           $asset = "pcap2good-gui-$version.exe"
-          Copy-Item -Path gui/target/release/pcap2good-gui.exe -Destination $asset
+          Copy-Item -Path target/release/pcap2good-gui.exe -Destination $asset
           "version=$version" >> $env:GITHUB_OUTPUT
           "asset=$asset" >> $env:GITHUB_OUTPUT
 

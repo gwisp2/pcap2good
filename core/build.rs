@@ -18,7 +18,7 @@ use flate2::write::GzEncoder;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-/// Directory holding the AnimeGameData checkout, relative to the project root.
+/// Directory holding the AnimeGameData checkout, relative to the workspace root.
 const GAME_DATA_SUBDIR: &str = "3rdparty/AnimeGameData";
 
 /// Protocol definitions used by the bundled packet decoder.
@@ -69,7 +69,13 @@ fn main() -> io::Result<()> {
             "CARGO_MANIFEST_DIR was not set by cargo",
         )
     })?);
-    let data_dir = manifest_dir.join(GAME_DATA_SUBDIR);
+    let workspace_dir = manifest_dir.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "pcap2good-core must be inside the workspace",
+        )
+    })?;
+    let data_dir = workspace_dir.join(GAME_DATA_SUBDIR);
     let out_dir =
         PathBuf::from(env::var_os("OUT_DIR").ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, "OUT_DIR was not set by cargo")

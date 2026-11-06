@@ -11,8 +11,8 @@ use anyhow::{Context, Result};
 use clap::{ArgAction, Args, Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
-use pcap2good::decode_capture_file;
-use pcap2good::player_data::ExportSettings;
+use pcap2good_core::decode_capture_file;
+use pcap2good_core::player_data::ExportSettings;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -175,7 +175,7 @@ fn init_tracing(verbosity: u8) {
     // for every packet it cannot decrypt, which is expected when a capture
     // contains traffic from before the handshake.
     let default_filter = match verbosity {
-        0 => "warn,pcap2good::auto_artifactarium=off,pcap2good=info",
+        0 => "warn,pcap2good_core::auto_artifactarium=off,pcap2good_core=info",
         1 => "info",
         2 => "debug",
         _ => "trace",

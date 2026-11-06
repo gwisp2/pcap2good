@@ -37,8 +37,8 @@ jobs:
 
       - name: Build wasm package
         run: |
-          cargo build --release --target wasm32-unknown-unknown --lib
-          wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good.wasm \
+          cargo build --release --target wasm32-unknown-unknown -p pcap2good-core --lib
+          wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good_core.wasm \
             --target web --out-dir web/pkg --out-name pcap2good
 
       - name: Configure Pages

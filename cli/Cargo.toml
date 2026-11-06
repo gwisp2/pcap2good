@@ -1,0 +1,22 @@
+[package]
+name = "pcap2good-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Command-line front end for pcap2good"
+license.workspace = true
+
+[[bin]]
+name = "pcap2good"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+pcap2good-core.workspace = true
+serde_json.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+base64.workspace = true
+protobuf.workspace = true

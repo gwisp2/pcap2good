@@ -1,47 +1,35 @@
-[package]
-name = "pcap2good"
+[workspace]
+members = ["core", "cli", "gui"]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-description = "GOOD exporter for Genshin Impact packet captures"
 license = "MIT"
 
-[[bin]]
-name = "pcap2good"
-path = "src/main.rs"
-
-[lib]
-name = "pcap2good"
-path = "src/lib.rs"
-crate-type = ["rlib", "cdylib"]
-
-[dependencies]
+[workspace.dependencies]
 anyhow = "1.0.99"
 base64 = "0.22.1"
 clap = { version = "4.5.47", features = ["derive"] }
+eframe = "0.33"
 etherparse = "0.16.0"
 flate2 = "1.1.9"
+getrandom = { version = "0.2", features = ["js"] }
 indexmap = "2.11.1"
 kcp = { git = "https://github.com/hashblen/mhy-kcp" }
 pcap-parser = "0.17.0"
+pcap2good-core = { path = "core" }
+pktmon = "0.6.2"
 protobuf = "3.7.1"
+protobuf-codegen = "3.7.1"
 rand_mt = "4.2"
+rfd = "0.17"
 rsa = "0.9"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.143", features = ["alloc"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
-
-[build-dependencies]
-flate2 = "1.1.9"
-protobuf-codegen = "3.7.1"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.143", features = ["alloc"] }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-# `getrandom` cannot pick a randomness source on wasm without the `js` feature.
-# This enables it for the whole dependency graph (rsa/rand).
-getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen = "0.2"
 
 [profile.release]

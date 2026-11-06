@@ -2,7 +2,7 @@
 //!
 //! The library exposes [`decode_capture_file`] and [`decode_capture_bytes`],
 //! which return the GOOD document together with capture statistics and
-//! warnings. The CLI and the wasm build are thin wrappers around them.
+//! warnings. The CLI, browser wrapper and desktop app use this crate.
 //!
 //! For live capture, feed packets to [`decode::Decoder`] as they arrive and
 //! call [`decode::Decoder::snapshot`] (or [`snapshot_outcome`]) to publish

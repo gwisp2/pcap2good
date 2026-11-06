@@ -14,12 +14,12 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 #[cfg(windows)]
-use pcap2good::decode::Decoder;
+use pcap2good_core::decode::Decoder;
 #[cfg(windows)]
-use pcap2good::pipeline::{CapturedFrame, LinkType, Timestamp};
+use pcap2good_core::pipeline::{CapturedFrame, LinkType, Timestamp};
 #[cfg(windows)]
-use pcap2good::snapshot_outcome;
-use pcap2good::{DecodeOutcome, ExportSettings, WarningCode, decode_capture_file};
+use pcap2good_core::snapshot_outcome;
+use pcap2good_core::{DecodeOutcome, ExportSettings, WarningCode, decode_capture_file};
 
 const OK: egui::Color32 = egui::Color32::from_rgb(0x6f, 0xd6, 0x8f);
 const ERROR: egui::Color32 = egui::Color32::from_rgb(0xf2, 0x8b, 0x82);
