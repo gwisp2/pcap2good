@@ -3,21 +3,14 @@ use std::sync::Arc;
 
 pub use crate::auto_artifactarium::r#gen::protos::{AvatarInfo, Item};
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
 
 use crate::gamedata::{GameData, Property, SkillType};
-use crate::good::{self, fake_uninitialized_4th_line};
+use crate::good;
 
 /// `PROP_PLAYER_SCOIN`: the player's Mora balance, delivered in the player
 /// property map (`PlayerDataNotify` / `PlayerPropNotify`) rather than in the
 /// item store.
 pub const PROP_PLAYER_SCOIN: u32 = 10016;
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct ExportSettings {
-    pub fake_initialize_4th_line: bool,
-}
 
 pub struct PlayerData {
     game_data: Arc<GameData>,
@@ -69,19 +62,13 @@ impl PlayerData {
         self.player_props.extend(props);
     }
 
-    pub fn export_genshin_optimizer(&self, settings: &ExportSettings) -> good::Good {
-        let artifacts = self.export_genshin_optimizer_artifacts();
-
+    pub fn export_genshin_optimizer(&self) -> good::Good {
         good::Good {
             format: "GOOD".to_string(),
             version: 3,
             source: "pcap2good".to_string(),
             characters: self.export_genshin_optimizer_characters(),
-            artifacts: if settings.fake_initialize_4th_line {
-                fake_uninitialized_4th_line(artifacts)
-            } else {
-                artifacts
-            },
+            artifacts: self.export_genshin_optimizer_artifacts(),
             weapons: self.export_genshin_optimizer_weapons(),
             materials: self.export_genshin_optimizer_materials(),
         }

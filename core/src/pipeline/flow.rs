@@ -82,7 +82,6 @@ pub struct FlowPipeline {
     pub framer: CommandFramer,
     pub router: CommandRouter,
 
-    shared: Arc<SharedContext>,
     stats: FlowStats,
 }
 
@@ -167,7 +166,7 @@ impl FlowHandler for FlowPipeline {
             .sinks
             .player
             .data
-            .export_genshin_optimizer(&self.shared.export_settings);
+            .export_genshin_optimizer();
         let achievements = std::mem::take(&mut self.router.sinks.achievements.store);
 
         FlowOutcome {
@@ -202,7 +201,7 @@ impl FlowPipeline {
                 .sinks
                 .player
                 .data
-                .export_genshin_optimizer(&self.shared.export_settings),
+                .export_genshin_optimizer(),
             achievements: self.router.sinks.achievements.store.clone(),
             stats,
             warnings: Vec::new(),
@@ -233,7 +232,6 @@ impl FlowPipelineFactory {
             ),
             framer: CommandFramer::new(id),
             router: CommandRouter::new(sinks),
-            shared: self.shared.clone(),
             stats: FlowStats::default(),
         }
     }

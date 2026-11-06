@@ -13,7 +13,6 @@ use crate::capture::CaptureStats;
 use crate::gamedata::GameData;
 use crate::pipeline::sink::{DefaultFlowSinkFactory, DumpState};
 use crate::pipeline::{CapturedFrame, Pipeline, SharedContext};
-use crate::player_data::ExportSettings;
 
 static DATABASE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/game_data.gz"));
 
@@ -32,13 +31,6 @@ impl Decoder {
     /// Creates a decoder. When `dump_dir` is set, every decoded command is
     /// written there as `.bin` and `.json`.
     pub fn with_command_dump(dump_dir: Option<PathBuf>) -> Result<Self> {
-        Self::with_settings(dump_dir, ExportSettings::default())
-    }
-
-    pub fn with_settings(
-        dump_dir: Option<PathBuf>,
-        export_settings: ExportSettings,
-    ) -> Result<Self> {
         let game_data = Arc::new(
             GameData::from_reader(GzDecoder::new(DATABASE))
                 .context("Failed to load the embedded game data")?,
@@ -57,7 +49,6 @@ impl Decoder {
             game_data,
             initial_keys: Arc::new(load_keys()?),
             rsa_keys: Arc::new(load_rsa_keys()),
-            export_settings,
         });
         let sink_factory = Arc::new(DefaultFlowSinkFactory { dump });
 

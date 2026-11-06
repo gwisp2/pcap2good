@@ -18,7 +18,6 @@ use serde::Serialize;
 
 use crate::capture::CaptureStats;
 use crate::gamedata::GameData;
-use crate::player_data::ExportSettings;
 use rsa::RsaPrivateKey;
 
 pub mod command;
@@ -81,7 +80,6 @@ pub struct SharedContext {
     pub game_data: Arc<GameData>,
     pub initial_keys: Arc<HashMap<u16, Vec<u8>>>,
     pub rsa_keys: Arc<Vec<RsaPrivateKey>>,
-    pub export_settings: ExportSettings,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

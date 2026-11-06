@@ -24,7 +24,6 @@ pub use achievements::{
 };
 pub use api::{DecodeOutcome, decode_capture_bytes, decode_capture_file, snapshot_outcome};
 pub use pipeline::{DecodeSnapshot, Warning, WarningCode};
-pub use player_data::ExportSettings;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;

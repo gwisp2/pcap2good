@@ -11,7 +11,6 @@ use crate::decode::{DecodeResult, DecodeSnapshot, DecodeStats, Decoder};
 use crate::good::Good;
 use crate::pipeline::flow::{FlowId, FlowOutcome, FlowStats};
 use crate::pipeline::{Warning, WarningCode};
-use crate::player_data::ExportSettings;
 
 /// The decoded GOOD document plus statistics and warnings.
 #[derive(Debug, Serialize)]
@@ -31,24 +30,16 @@ pub struct DecodeOutcome {
 }
 
 /// Decodes a capture file.
-pub fn decode_capture_file(
-    path: &Path,
-    settings: &ExportSettings,
-    dump_dir: Option<PathBuf>,
-) -> Result<DecodeOutcome> {
-    let mut decoder = Decoder::with_settings(dump_dir, settings.clone())?;
+pub fn decode_capture_file(path: &Path, dump_dir: Option<PathBuf>) -> Result<DecodeOutcome> {
+    let mut decoder = Decoder::with_command_dump(dump_dir)?;
     let capture = capture::read_capture_file(path, |frame| decoder.process_frame(frame))?;
 
     Ok(finish(decoder.finish(capture)))
 }
 
 /// Decodes a capture that is already in memory.
-pub fn decode_capture_bytes(
-    bytes: &[u8],
-    settings: &ExportSettings,
-    dump_dir: Option<PathBuf>,
-) -> Result<DecodeOutcome> {
-    let mut decoder = Decoder::with_settings(dump_dir, settings.clone())?;
+pub fn decode_capture_bytes(bytes: &[u8], dump_dir: Option<PathBuf>) -> Result<DecodeOutcome> {
+    let mut decoder = Decoder::with_command_dump(dump_dir)?;
     let capture = capture::read_capture_bytes(bytes, |frame| decoder.process_frame(frame))?;
 
     Ok(finish(decoder.finish(capture)))

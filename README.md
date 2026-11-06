@@ -77,7 +77,6 @@ update that file from upstream Irminsul and rebuild.
 | --- | --- |
 | `-o`, `--out <FILE>` | Write the GOOD data to `<FILE>` instead of stdout |
 | `--achievements <FILE>` | Write completed achievements to `<FILE>` in stardb.gg import format |
-| `--fake-initialize-4th-line` | Pretend unactivated fourth substats have already rolled |
 | `--compact` | Single-line JSON instead of indented JSON |
 | `--dump-commands <DIR>` | Write every decoded command to a directory as `<NNNN>-<id>.bin` and `<NNNN>-<id>.json` (for debugging) |
 | `-v`, `-vv`, `-vvv` | Info, debug and trace logging on stderr |
@@ -222,14 +221,13 @@ modules and `fetch` do not work from `file://`).
 
 A native desktop front end lives in [`gui/`](gui). It uses the library directly,
 so no WebAssembly or web server is involved. The start screen offers
-**Open capture file** and, on Windows, **Live capture**. Choosing a capture
-starts decoding immediately; the app shows a centered `Decoding...` label, then
-a compact summary of the decoded characters, artifacts, weapons, items, Mora and
-achievements together with any warnings and a large **Export GOOD** button. When
-the capture contains completed achievements, a separate **Export achievements**
-button appears. Capture files can also be dropped on the window, and a small
-option below the buttons enables the fourth-substat workaround. Keyboard
-shortcuts: `Ctrl+O` open, `Ctrl+S` export.
+**Live capture** and **Load capture file**. Choosing a capture starts decoding
+immediately; the app shows a centered `Decoding...` label, then a compact summary
+of the decoded characters, artifacts, weapons, items, Mora and achievements
+together with any warnings and a large **Export GOOD** button. When the capture
+contains completed achievements, a separate **Export achievements** button
+appears. Capture files can also be dropped on the window. Keyboard shortcuts:
+`Ctrl+O` open, `Ctrl+S` export.
 
 Live capture uses the Windows PktMon service through the [`pktmon`] crate. If
 the app is not already elevated, pressing **Live capture** restarts it through

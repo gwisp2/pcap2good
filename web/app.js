@@ -116,12 +116,7 @@ function startDecode(file) {
   status.textContent = "";
   fileInput.disabled = true;
 
-  worker.postMessage({
-    file,
-    options: {
-      fakeInitialize4thLine: false,
-    },
-  });
+  worker.postMessage({ file });
 }
 
 function finishDecoding(success) {

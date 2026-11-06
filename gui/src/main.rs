@@ -19,7 +19,7 @@ use pcap2good_core::decode::Decoder;
 use pcap2good_core::pipeline::{CapturedFrame, LinkType, Timestamp};
 #[cfg(windows)]
 use pcap2good_core::snapshot_outcome;
-use pcap2good_core::{DecodeOutcome, ExportSettings, WarningCode, decode_capture_file};
+use pcap2good_core::{DecodeOutcome, WarningCode, decode_capture_file};
 
 const OK: egui::Color32 = egui::Color32::from_rgb(0x6f, 0xd6, 0x8f);
 const ERROR: egui::Color32 = egui::Color32::from_rgb(0xf2, 0x8b, 0x82);
@@ -76,7 +76,6 @@ impl Drop for LiveSession {
 struct Pcap2GoodApp {
     selected: Option<PathBuf>,
     selected_size: u64,
-    fake_4th_line: bool,
     outcome: Option<DecodeOutcome>,
     json: String,
     status: Status,
@@ -93,7 +92,6 @@ impl Pcap2GoodApp {
         let mut app = Self {
             selected: None,
             selected_size: 0,
-            fake_4th_line: false,
             outcome: None,
             json: String::new(),
             status: Status::Idle,
@@ -271,9 +269,6 @@ impl Pcap2GoodApp {
             return;
         };
 
-        let settings = ExportSettings {
-            fake_initialize_4th_line: self.fake_4th_line,
-        };
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
 
@@ -284,8 +279,7 @@ impl Pcap2GoodApp {
         self.decode_rx = Some(rx);
 
         std::thread::spawn(move || {
-            let result =
-                decode_capture_file(&path, &settings, None).map_err(|error| format!("{error:#}"));
+            let result = decode_capture_file(&path, None).map_err(|error| format!("{error:#}"));
             let _ = tx.send(result);
             ctx.request_repaint();
         });
@@ -345,9 +339,6 @@ impl Pcap2GoodApp {
                 return;
             }
 
-            let settings = ExportSettings {
-                fake_initialize_4th_line: self.fake_4th_line,
-            };
             let (tx, rx) = mpsc::channel();
             let stop = Arc::new(AtomicBool::new(false));
             let shared_latest = Arc::new(Mutex::new(None));
@@ -364,14 +355,9 @@ impl Pcap2GoodApp {
             let stop_clone = stop.clone();
             let latest_clone = shared_latest.clone();
             let handle = std::thread::spawn(move || {
-                if let Err(error) = capture_live(
-                    settings,
-                    ctx.clone(),
-                    tx.clone(),
-                    stop,
-                    latest_clone,
-                    started,
-                ) {
+                if let Err(error) =
+                    capture_live(ctx.clone(), tx.clone(), stop, latest_clone, started)
+                {
                     let _ = tx.send(LiveMessage::Failed(error));
                     ctx.request_repaint();
                 }
@@ -545,13 +531,6 @@ impl Pcap2GoodApp {
                 if ui.add(load).clicked() {
                     self.open_capture_dialog(ctx);
                 }
-
-                ui.add_space(14.0);
-                ui.checkbox(
-                    &mut self.fake_4th_line,
-                    egui::RichText::new("Pretend unactivated fourth substats have already rolled")
-                        .small(),
-                );
 
                 if let Status::Error(message) = &self.status {
                     ui.add_space(10.0);
@@ -939,7 +918,6 @@ fn decoded_stats_row(ui: &mut egui::Ui, outcome: &DecodeOutcome) {
 
 #[cfg(windows)]
 fn capture_live(
-    settings: ExportSettings,
     ctx: egui::Context,
     tx: mpsc::Sender<LiveMessage>,
     stop: Arc<AtomicBool>,
@@ -964,8 +942,8 @@ fn capture_live(
     }
     capture.start().map_err(live_error)?;
 
-    let mut decoder = Decoder::with_settings(None, settings)
-        .map_err(|error| format!("Failed to initialise the decoder: {error:#}"))?;
+    let mut decoder =
+        Decoder::new().map_err(|error| format!("Failed to initialise the decoder: {error:#}"))?;
 
     let mut last_update = Instant::now();
     loop {

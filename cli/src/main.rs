@@ -12,7 +12,6 @@ use clap::{ArgAction, Args, Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
 use pcap2good_core::decode_capture_file;
-use pcap2good_core::player_data::ExportSettings;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -63,21 +62,9 @@ struct DecodeArgs {
 
 #[derive(Debug, Args)]
 struct ExportArgs {
-    /// Pretend that unactivated fourth substats have already rolled
-    #[arg(long)]
-    fake_initialize_4th_line: bool,
-
     /// Write compact JSON instead of indented JSON
     #[arg(long)]
     compact: bool,
-}
-
-impl ExportArgs {
-    fn settings(&self) -> ExportSettings {
-        ExportSettings {
-            fake_initialize_4th_line: self.fake_initialize_4th_line,
-        }
-    }
 }
 
 fn main() -> ExitCode {
@@ -101,8 +88,7 @@ fn run(command: Command) -> Result<()> {
 
 fn decode(args: DecodeArgs) -> Result<()> {
     let compact = args.export.compact;
-    let settings = args.export.settings();
-    let outcome = decode_capture_file(&args.path, &settings, args.dump_commands)?;
+    let outcome = decode_capture_file(&args.path, args.dump_commands)?;
 
     if let Some(path) = &args.achievements {
         let achievements = if compact {
