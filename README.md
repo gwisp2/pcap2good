@@ -1,159 +1,63 @@
 # pcap2good
 
-Counterpart to [Irminsul](https://github.com/konkers/irminsul): it reads a packet
-capture, or captures live traffic on Windows through PktMon, and prints the
-player's characters, weapons and artifacts as
-[GOOD](https://frzyc.github.io/genshin-optimizer/#/doc) v3 data, on stdout or in
-a file. Completed achievements are extracted separately and can be written to
-their own JSON file.
+[Web app](https://gwisp2.github.io/pcap2good/) ·
+[Desktop downloads](https://github.com/gwisp2/pcap2good/releases/latest) ·
+[Command line](#command-line-tool)
 
-```console
-$ pcap2good decode path/to/capture.pcap
-{
-  "format": "GOOD",
-  "version": 3,
-  "source": "pcap2good",
-  "characters": [ ... ],
-  "artifacts": [ ... ],
-  "weapons": [ ... ],
-  "materials": { ... }
-}
-```
+pcap2good is a complex project that aims to export Genshin Impact player data
+from network packet captures into
+[GOOD](https://frzyc.github.io/genshin-optimizer/#/doc) v3 data that can be
+imported into Genshin Optimizer.
 
-Unless `--out` is used, only the GOOD JSON document is written to stdout. Progress,
-warnings and errors go to stderr, so the output can be piped or redirected:
+Everything happens locally: packet captures and decoded data are never uploaded.
 
-```console
-$ pcap2good decode capture.pcap --out good.json
-$ pcap2good decode capture.pcap > good.json
-$ pcap2good decode capture.pcap | jq '.artifacts | length'
-$ pcap2good decode capture.pcap --achievements achievements.json
-```
+## What it extracts
 
-The achievements file uses the format accepted by stardb.gg's importer and
-contains only finished or claimed achievements:
+- Characters, including level, ascension, constellation and talent levels
+- Weapons, including level, ascension and refinement
+- Artifacts, including set, slot, main stat, substats and equipped character
+- Materials and the player's Mora balance
+- Completed achievements
 
-```json
-{ "gi_achievements": [80001, 80002, 80005] }
-```
+## Web tool
 
-When the capture contains a player property update, the player's Mora balance is
-exported in `materials` as `Mora`.
+**[Open pcap2good in your browser →](https://gwisp2.github.io/pcap2good/)**
 
-## Capturing
+The web tool lets you extract data from packet captures made with **Wireshark,
+PCAPdroid, tcpdump** or any other capture software that writes `.pcap` or
+`.pcapng` files. Drop a capture onto the page and download the GOOD document and
+completed achievements as separate JSON files.
 
-The capture must contain the connection handshake with the game server, since
-the encryption key for the rest of the session is negotiated there. In practice
-that means starting the capture **before** launching Genshin Impact, or before
-logging in.
+Everything runs locally in your browser; the capture is never uploaded.
 
-Genshin communicates over **UDP ports 22101 and 22102**.
+## Windows desktop app
 
-On Windows, the [desktop app](#desktop-app-egui) can capture live traffic with
-the built-in PktMon service; no Npcap or WinPcap installation is needed. Press
-**Live capture** before launching the game; Windows asks for administrator
-rights if the app is not already elevated.
+**[Download the latest Windows x64 release →](https://github.com/gwisp2/pcap2good/releases/latest)**
 
-```console
-# Linux
-$ sudo tcpdump -i any -w capture.pcap 'udp portrange 22101-22102'
+![pcap2good desktop app after a live capture](docs/desktop-app.png)
 
-# Windows (Npcap must be installed)
-$ tshark -i "Ethernet" -f "udp portrange 22101-22102" -w capture.pcap
-```
+*Live capture result in the Windows desktop app.*
 
-Captures taken with Wireshark's "any" interface or `tcpdump -i any` use the
-Linux "cooked" link type; that is supported, as are ordinary Ethernet captures,
-pcapng files, raw IP and BSD loopback captures.
+The desktop app is the easiest option on Windows. It can decode existing capture
+files and capture live game traffic. Decoded data is shown as it is extracted,
+and both GOOD data and achievements can be exported.
 
-Decryption starts from a table of dispatch keys. Those keys live in
-[`core/keys/gi.json`](core/keys/gi.json) and are the same table Irminsul ships. If a
-capture cannot be decrypted (for example after the game rotates its keys),
-update that file from upstream Irminsul and rebuild.
+## Command-line tool
 
-## Options
-
-| Option | Description |
-| --- | --- |
-| `-o`, `--out <FILE>` | Write the GOOD data to `<FILE>` instead of stdout |
-| `--achievements <FILE>` | Write completed achievements to `<FILE>` in stardb.gg import format |
-| `--compact` | Single-line JSON instead of indented JSON |
-| `--dump-commands <DIR>` | Write every decoded command to a directory as `<NNNN>-<id>.bin` and `<NNNN>-<id>.json` (for debugging) |
-| `-v`, `-vv`, `-vvv` | Info, debug and trace logging on stderr |
-
-Every character, artifact, weapon and material in the capture is exported.
-Completed achievements are never part of the GOOD document; they are only
-written to the file passed to `--achievements`.
-
-With `--dump-commands`, every command produces two files: the raw payload as
-`<NNNN>-<id>.bin` and a schema-less JSON rendering as `<NNNN>-<id>.json`.
-Because the game's protobuf schemas are not available to this tool, the JSON
-mirrors the wire format: object keys are field numbers, fields that occur more
-than once become arrays, and length-delimited fields are decoded as nested
-messages when possible, otherwise as text or base64. The header and body are
-decoded separately:
-
-```json
-{
-  "header": { "3": 1, "6": 1793150966255 },
-  "body": { "7": { "1": 10000061, "2": 100 } }
-}
-```
-
-If the capture does not contain any character or inventory packets, the command
-still prints a valid (empty) GOOD document and writes a warning to stderr. This
-usually means the capture started too late to see the handshake.
+The cross-platform `pcap2good` command that does the same task the web tool does, but as a terminal command.
 
 ## Known limitations
-
-The packet pipeline itself is implemented in this crate. Only a few low-level
-pieces are partially embedded from [`auto-artifactarium`], the decoder Irminsul
-uses, so limitations of that decoder still apply where those pieces are used.
 
 After the login exchange the game encrypts its traffic with a session key, which
 the decoder derives from the login response. Some Genshin Impact 7.1 sessions get
 that response compressed with Oodle Network TCP, which the decoder does not
-decompress, so the session key is never derived and only the handful of login
-commands that use the dispatch key can be read. The CLI reports this as:
+decompress, so sometimes you need to try to start the game again.
 
-```
-warning: the game compressed its login response (Oodle Network TCP), which this decoder cannot decompress
-         the session key could not be derived; re-capture the session (the login response is not always compressed)
-```
+## Where exported data can be imported
 
-The compression is not deterministic: in a working session the same login
-response arrives as a plain 25 576-byte protobuf body (25 585 bytes including
-its 9-byte header), while a failing session carries the same message compressed
-to 20 071 bytes with the decompressed size in header field 8. Re-capturing
-usually produces the uncompressed variant.
-
-This affects Irminsul itself as well; it is tracked upstream in
-[konkers/irminsul#160](https://github.com/konkers/irminsul/issues/160) and
-[konkers/irminsul#163](https://github.com/konkers/irminsul/issues/163). Nothing
-is wrong with the capture file when this happens — and captures whose login
-response is not compressed decode normally.
-
-[`auto-artifactarium`]: https://github.com/konkers/auto-artifactarium
-
-## Packet pipeline
-
-The packet pipeline lives in [`core/src/pipeline`](core/src/pipeline). It splits the
-capture into link-layer, UDP, KCP, decryption, command-framing and consumer
-stages, and keeps separate state for every game flow found in a capture.
-
-The upstream [`auto-artifactarium`] crate is not used as a dependency. Some of
-its low-level pieces are partially embedded in the
-[`auto_artifactarium`](core/src/auto_artifactarium) module instead: the generated
-protobuf types and a few cryptographic/seed helpers adapted from upstream
-revision `abbbf7a3f58846512250a789a76be2d3cdb115c1` (v1.4.0). The pipeline,
-KCP handling and command framing are implemented here; player-data matching uses
-those embedded helpers.
-
-The protobuf definitions live in
-[`core/src/auto_artifactarium/protos.proto`](core/src/auto_artifactarium/protos.proto).
-[`core/build.rs`](core/build.rs) regenerates the Rust bindings into `OUT_DIR`
-whenever that file changes, so `cargo build` / `cargo check` is all that is
-needed after editing it.
+- [Genshin Track](https://genshintrack.com/) - inventory items
+- [Genshin Optimizer](https://frzyc.github.io/genshin-optimizer/) - artifacts
+- [stardb.gg](https://stardb.gg/) - achievements
 
 ## Building
 
@@ -166,37 +70,21 @@ The repository is a Cargo workspace with three packages:
 - `gui/` — `pcap2good-gui`, the desktop app
 
 The build needs one local dependency, which is not committed:
-[Dimbreath's AnimeGameData][anime-game-data] dump under `3rdparty/AnimeGameData`
-(a symlink or junction to an existing checkout works).
+[Dimbreath's AnimeGameData](https://github.com/DimbreathBot/AnimeGameData) dump under `3rdparty/AnimeGameData`
+(a symlink to an existing checkout works).
+
+
+Build the Windows desktop app with:
 
 ```console
-$ ./scripts/fetch-game-data.ps1              # or .sh on other platforms
-$ cargo build --release -p pcap2good-cli
+$ cargo build --release -p pcap2good-gui
 ```
 
-The script downloads only the 18 files the build reads (about 37 MB); a full
-AnimeGameData checkout moved or linked to `3rdparty/AnimeGameData` works too.
+## Building the web tool
 
-The build reads names, artifact sets, affixes, item ids, achievement ids and
-related tables from the data directory and embeds them in the binary, so
-decoding itself works fully offline. The item-id set covers every item-bearing Excel config
-(materials, weapons, artifacts, furniture, TPS weapons, Beyond materials,
-Beyond hall facilities and display items). The directory is gitignored; update
-it and rebuild when the game data changes.
-
-```console
-$ cargo test --workspace
-$ cargo clippy --workspace --all-targets
-```
-
-[anime-game-data]: https://gitlab.com/Dimbreath/animegamedata2
-
-## Web wrapper
-
-A static browser front end lives in [`web/`](web). It runs the decoder in a Web
-Worker via WebAssembly, so the capture never leaves the machine and the page can
-be served from any static file host. Completed achievements can be downloaded
-separately as a stardb-compatible JSON file.
+The static browser front end lives in [`web/`](web). It runs the decoder in a Web
+Worker via WebAssembly, so the page can be served from any static file host and
+the capture never leaves the browser.
 
 ```console
 # The CLI version must match the wasm-bindgen crate in Cargo.lock.
@@ -205,97 +93,23 @@ $ ./web/build.ps1
 $ python -m http.server 8000 -d web
 ```
 
-Open <http://localhost:8000>. On other platforms the build is:
-
-```console
-$ ./scripts/fetch-game-data.sh
-$ cargo build --release --target wasm32-unknown-unknown -p pcap2good-core --lib
-$ wasm-bindgen target/wasm32-unknown-unknown/release/pcap2good_core.wasm \
-      --target web --out-dir web/pkg --out-name pcap2good
-```
+Open <http://localhost:8000>.
 
 `web/pkg` is generated and gitignored. The page needs a real HTTP server (ES
 modules and `fetch` do not work from `file://`).
 
-## Desktop app (egui)
+## Thanks to
 
-A native desktop front end lives in [`gui/`](gui). It uses the library directly,
-so no WebAssembly or web server is involved. The start screen offers
-**Live capture** and **Load capture file**. Choosing a capture starts decoding
-immediately; the app shows a centered `Decoding...` label, then a compact summary
-of the decoded characters, artifacts, weapons, items, Mora and achievements
-together with any warnings and a large **Export GOOD** button. When the capture
-contains completed achievements, a separate **Export achievements** button
-appears. Capture files can also be dropped on the window. Keyboard shortcuts:
-`Ctrl+O` open, `Ctrl+S` export.
+This project would not exist without the work of others:
 
-Live capture uses the Windows PktMon service through the [`pktmon`] crate. If
-the app is not already elevated, pressing **Live capture** restarts it through
-the Windows UAC prompt. Capture is filtered to UDP ports 22101 and 22102.
-Packets are decoded on a worker thread as they arrive, and the app updates
-packet, command, flow and decoded-data counts about four times per second while
-the session is open. Press **Stop capture** to finish the session and export the
-GOOD data. Start the live capture before launching Genshin Impact or before
-logging in, because the login handshake is needed to derive the session key.
-
-[`pktmon`]: https://crates.io/crates/pktmon
-
-```console
-# Run without a capture pre-selected:
-$ cargo run -p pcap2good-gui
-
-# Or open a capture straight away:
-$ cargo run -p pcap2good-gui -- capture.pcap
-
-# Live capture prompts for administrator rights if needed:
-$ cargo run -p pcap2good-gui
-```
-
-Build a release binary with:
-
-```console
-$ cargo build --release -p pcap2good-gui
-```
-
-Windows x64 release builds are produced by the
-[desktop workflow](.github/workflows/desktop.yml) and attached to GitHub
-releases as `pcap2good-gui-<tag>.exe` when a release is published.
-
-The app uses `eframe`/`egui` for rendering and `rfd` for native file dialogs.
-It needs an OpenGL-capable desktop; on Linux that means X11 or Wayland (the file
-dialogs use the XDG desktop portal). Live capture is Windows-only; on other
-platforms the app only reads capture files.
-
-## Deploying to GitHub Pages
-
-GitHub Pages only serves static files, so the wasm package is built in CI. The
-[`pages` workflow](.github/workflows/pages.yml) does this on every push:
-
-1. Push the repository to GitHub.
-2. Open **Settings → Pages → Build and deployment** and set **Source** to
-   **GitHub Actions**.
-3. Push to `main` or `master`, or run **Deploy web wrapper** from the Actions
-   tab.
-
-The site is served at `https://<user>.github.io/<repo>/`. The workflow fetches
-the pinned game data, installs the matching `wasm-bindgen-cli`, builds
-`web/pkg`, and deploys `web/`.
-
-Nothing generated or machine-specific is committed: `target/`, `3rdparty/` and
-`web/pkg/` are gitignored. If your default branch is neither `main` nor
-`master`, update the `on.push.branches` list in the workflow.
-
-## Differences from Irminsul
-
-- The CLI and web page read a capture file instead of capturing live traffic; no
-  admin/root rights and no Npcap/pktmon dependency to decode.
-- The native desktop app adds live capture on Windows through PktMon, plus a
-  static in-browser (WASM) front end and the command line tool.
-- Handles `.pcap` and `.pcapng` files with legacy pcap and pcapng sections.
-- No update checker or wish history.
+- [Irminsul](https://github.com/konkers/irminsul) — the reference implementation
+  this project's decoder and GOOD export logic are based on.
+- [auto-artifactarium](https://github.com/konkers/auto-artifactarium) — packet
+  decoding work reused for player-data extraction.
+- [stardb-exporter](https://github.com/juliuskreutz/stardb-exporter) — the
+  achievement exporter work that defines the stardb-compatible format.
 
 ## License
 
-MIT. Much of the decoding and GOOD export logic is adapted from
-[Irminsul](https://github.com/konkers/irminsul), Copyright (c) 2025 Erik Gilling,
-which is also MIT licensed. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
+
