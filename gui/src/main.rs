@@ -4,7 +4,7 @@
 //! options and presentation. Decoding runs on a worker thread in both modes;
 //! live capture publishes statistics and decoded data while it is running.
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,6 +29,9 @@ const WARN: egui::Color32 = egui::Color32::from_rgb(0xf0, 0xc8, 0x7a);
 const ACCENT: egui::Color32 = egui::Color32::from_rgb(0xd3, 0xa7, 0x5f);
 const ON_ACCENT: egui::Color32 = egui::Color32::from_rgb(0x14, 0x17, 0x1c);
 const SECONDARY: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x41, 0x4b);
+const CARD_BG: egui::Color32 = egui::Color32::from_rgb(0x1b, 0x20, 0x27);
+const OK_BORDER: egui::Color32 = egui::Color32::from_rgb(0x3b, 0x6d, 0x49);
+const ERROR_BORDER: egui::Color32 = egui::Color32::from_rgb(0x6d, 0x3f, 0x3a);
 
 enum Status {
     Idle,
@@ -60,6 +63,7 @@ struct LiveSession {
     started: Instant,
     latest: Option<LiveUpdate>,
     stopping: bool,
+    show_debug: bool,
 }
 
 impl Drop for LiveSession {
@@ -371,6 +375,7 @@ impl Pcap2GoodApp {
                 started,
                 latest: None,
                 stopping: false,
+                show_debug: false,
             });
         }
     }
@@ -680,7 +685,7 @@ impl eframe::App for Pcap2GoodApp {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        if let Some(session) = &self.live {
+                        if let Some(session) = &mut self.live {
                             stop |= render_live(ui, session);
                         }
                     });
@@ -771,7 +776,7 @@ impl eframe::App for Pcap2GoodApp {
     }
 }
 
-fn render_live(ui: &mut egui::Ui, session: &LiveSession) -> bool {
+fn render_live(ui: &mut egui::Ui, session: &mut LiveSession) -> bool {
     let mut stop = false;
 
     ui.add_space(6.0);
@@ -798,7 +803,9 @@ fn render_live(ui: &mut egui::Ui, session: &LiveSession) -> bool {
             egui::RichText::new(format!("{:.1}s", session.started.elapsed().as_secs_f32())).weak(),
         );
 
-        if let Some(update) = &session.latest {
+        if session.show_debug
+            && let Some(update) = &session.latest
+        {
             let seconds = update.elapsed.as_secs_f32().max(0.001);
             let rate = update.outcome.capture.packets as f32 / seconds;
             ui.label(egui::RichText::new(format!("· {rate:.0} packets/s")).weak());
@@ -809,23 +816,24 @@ fn render_live(ui: &mut egui::Ui, session: &LiveSession) -> bool {
 
     match &session.latest {
         Some(update) => {
-            live_stats_grid(ui, &update.outcome);
-
-            ui.add_space(8.0);
             decoded_stats_row(ui, &update.outcome);
+            ui.add_space(6.0);
+            ui.toggle_value(&mut session.show_debug, "Show debug data");
+
+            if session.show_debug {
+                ui.add_space(8.0);
+                live_stats_grid(ui, &update.outcome);
+            }
 
             let warnings: Vec<_> = update
                 .outcome
                 .warnings
                 .iter()
                 .filter(|warning| {
-                    if matches!(warning.code, WarningCode::NoPlayerData) {
-                        return false;
-                    }
-                    if matches!(warning.code, WarningCode::NoHandshake) {
-                        return update.elapsed >= Duration::from_secs(5);
-                    }
-                    true
+                    !matches!(
+                        warning.code,
+                        WarningCode::NoHandshake | WarningCode::NoPlayerData
+                    )
                 })
                 .collect();
             if !warnings.is_empty() {
@@ -900,19 +908,18 @@ fn packet_stat(ui: &mut egui::Ui, label: &str, value: &str) {
 
 fn decoded_stats_row(ui: &mut egui::Ui, outcome: &DecodeOutcome) {
     let entries = decoded_entries(outcome);
+    let width = ((ui.available_width() - 70.0) / 3.0).max(110.0);
 
     egui::Grid::new("live-decoded-stats")
-        .num_columns(6)
+        .num_columns(3)
         .spacing([8.0, 6.0])
         .show(ui, |ui| {
-            for (label, value) in &entries {
-                ui.vertical(|ui| {
-                    ui.set_min_width(60.0);
-                    ui.label(egui::RichText::new(*label).small().weak());
-                    ui.label(egui::RichText::new(value).size(16.0).strong());
-                });
+            for (index, (label, value, found)) in entries.iter().enumerate() {
+                extracted_card(ui, label, value, *found, width);
+                if index % 3 == 2 {
+                    ui.end_row();
+                }
             }
-            ui.end_row();
         });
 }
 
@@ -1102,13 +1109,14 @@ fn apply_theme(ctx: &egui::Context) {
 
 fn summary_grid(ui: &mut egui::Ui, outcome: &DecodeOutcome) {
     let entries = decoded_entries(outcome);
+    let width = ((ui.available_width() - 46.0) / 2.0).max(150.0);
 
     egui::Grid::new("summary-grid")
         .num_columns(2)
-        .spacing([16.0, 8.0])
+        .spacing([10.0, 8.0])
         .show(ui, |ui| {
-            for (index, (label, value)) in entries.iter().enumerate() {
-                summary_stat(ui, label, value);
+            for (index, (label, value, found)) in entries.iter().enumerate() {
+                extracted_card(ui, label, value, *found, width);
                 if index % 2 == 1 {
                     ui.end_row();
                 }
@@ -1116,7 +1124,7 @@ fn summary_grid(ui: &mut egui::Ui, outcome: &DecodeOutcome) {
         });
 }
 
-fn decoded_entries(outcome: &DecodeOutcome) -> [(&'static str, String); 6] {
+fn decoded_entries(outcome: &DecodeOutcome) -> [(&'static str, String, bool); 6] {
     let item_types = outcome
         .good
         .materials
@@ -1129,26 +1137,65 @@ fn decoded_entries(outcome: &DecodeOutcome) -> [(&'static str, String); 6] {
         1 => "1 type".to_owned(),
         count => format!("{count} types"),
     };
+    let characters = outcome.good.characters.len();
+    let artifacts = outcome.good.artifacts.len();
+    let weapons = outcome.good.weapons.len();
+    let achievements = outcome.achievements.gi_achievements.len();
 
     [
-        ("Characters", outcome.good.characters.len().to_string()),
-        ("Artifacts", outcome.good.artifacts.len().to_string()),
-        ("Weapons", outcome.good.weapons.len().to_string()),
-        ("Items", items),
-        ("Mora", mora.to_string()),
-        (
-            "Achievements",
-            outcome.achievements.gi_achievements.len().to_string(),
-        ),
+        ("Characters", characters.to_string(), characters > 0),
+        ("Artifacts", artifacts.to_string(), artifacts > 0),
+        ("Weapons", weapons.to_string(), weapons > 0),
+        ("Items", items, item_types > 0),
+        ("Mora", mora.to_string(), mora > 0),
+        ("Achievements", achievements.to_string(), achievements > 0),
     ]
 }
 
-fn summary_stat(ui: &mut egui::Ui, label: &str, value: &str) {
-    ui.vertical(|ui| {
-        ui.set_min_width(100.0);
-        ui.label(egui::RichText::new(label).small().weak());
-        ui.label(egui::RichText::new(value).size(18.0).strong());
-    });
+fn extracted_card(ui: &mut egui::Ui, label: &str, value: &str, found: bool, width: f32) {
+    let border = if found { OK_BORDER } else { ERROR_BORDER };
+
+    egui::Frame::new()
+        .fill(CARD_BG)
+        .stroke(egui::Stroke::new(1.0_f32, border))
+        .corner_radius(egui::CornerRadius::same(6))
+        .inner_margin(egui::Margin::symmetric(8, 5))
+        .show(ui, |ui| {
+            ui.set_width(width);
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                extracted_badge(ui, found);
+                ui.label(egui::RichText::new(label).size(14.0).color(TEXT));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(egui::RichText::new(value).strong().color(TEXT));
+                });
+            });
+        });
+}
+
+fn extracted_badge(ui: &mut egui::Ui, found: bool) {
+    let fill = if found { OK } else { ERROR };
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+
+    ui.painter().circle_filled(rect.center(), 8.0, fill);
+
+    // Draw the icon instead of relying on a tick/cross glyph being present in
+    // the default egui fonts.
+    let stroke = egui::Stroke::new(2.0_f32, ON_ACCENT);
+    if found {
+        let a = rect.lerp_inside(egui::vec2(0.27, 0.52));
+        let b = rect.lerp_inside(egui::vec2(0.43, 0.68));
+        let c = rect.lerp_inside(egui::vec2(0.73, 0.33));
+        ui.painter().line_segment([a, b], stroke);
+        ui.painter().line_segment([b, c], stroke);
+    } else {
+        let a = rect.lerp_inside(egui::vec2(0.32, 0.32));
+        let b = rect.lerp_inside(egui::vec2(0.68, 0.68));
+        let c = rect.lerp_inside(egui::vec2(0.68, 0.32));
+        let d = rect.lerp_inside(egui::vec2(0.32, 0.68));
+        ui.painter().line_segment([a, b], stroke);
+        ui.painter().line_segment([c, d], stroke);
+    }
 }
 
 fn plural(count: u64, singular: &str, plural: &str) -> String {

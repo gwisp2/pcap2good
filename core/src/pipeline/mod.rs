@@ -177,7 +177,6 @@ pub enum WarningCode {
     MultipleFlows { count: usize },
     NoHandshake,
     CompressedLogin,
-    SessionKeyNotEstablished,
     NoPlayerData,
 }
 

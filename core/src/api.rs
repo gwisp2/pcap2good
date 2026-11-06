@@ -154,18 +154,6 @@ fn warnings(stats: &FlowStats) -> Vec<Warning> {
             "the session key could not be derived; re-capture the session (the login response \
              is not always compressed)",
         )]
-    } else if stats.game_datagrams > 20 && stats.commands.saturating_mul(10) < stats.game_datagrams
-    {
-        vec![Warning::new(
-            WarningCode::SessionKeyNotEstablished,
-            format!(
-                "only {} commands could be decrypted from {} game packets, so the session key \
-                 was not established",
-                stats.commands, stats.game_datagrams
-            ),
-            "the login response likely uses a format this decoder does not support yet (see the \
-             README)",
-        )]
     } else {
         vec![Warning::new(
             WarningCode::NoPlayerData,

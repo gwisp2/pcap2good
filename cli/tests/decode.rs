@@ -616,9 +616,10 @@ fn capture_without_game_data_produces_empty_export() {
 }
 
 #[test]
-fn many_undecryptable_packets_report_the_session_key_problem() {
+fn many_undecryptable_packets_do_not_report_a_session_key_failure() {
     // Captures of game versions whose login exchange cannot be decoded look
     // like this: a handshake and lots of traffic, almost none of it decryptable.
+    // This should fall back to the generic missing-player-data warning.
     let mut frames = vec![ethernet_frame(&udp_packet(&[0, 0, 0, 0xff]))];
     for sequence in 0..25u32 {
         frames.push(ethernet_frame(&udp_packet(&kcp_segment(
@@ -634,10 +635,8 @@ fn many_undecryptable_packets_report_the_session_key_problem() {
     assert!(output.status.success());
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("session key was not established"),
-        "{stderr}"
-    );
+    assert!(!stderr.contains("session key was not established"), "{stderr}");
+    assert!(stderr.contains("no character or inventory data"), "{stderr}");
 }
 
 #[test]
