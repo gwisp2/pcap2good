@@ -1,10 +1,11 @@
 # pcap2good
 
-Offline counterpart to [Irminsul](https://github.com/konkers/irminsul): instead of
-sniffing live game traffic, it reads a packet capture from disk and prints the
-player's characters, weapons and artifacts as [GOOD](https://frzyc.github.io/genshin-optimizer/#/doc)
-v3 data, on stdout or in a file. Completed achievements are extracted separately
-and can be written to their own JSON file.
+Counterpart to [Irminsul](https://github.com/konkers/irminsul): it reads a packet
+capture, or captures live traffic on Windows through PktMon, and prints the
+player's characters, weapons and artifacts as
+[GOOD](https://frzyc.github.io/genshin-optimizer/#/doc) v3 data, on stdout or in
+a file. Completed achievements are extracted separately and can be written to
+their own JSON file.
 
 ```console
 $ pcap2good decode path/to/capture.pcap
@@ -47,6 +48,11 @@ that means starting the capture **before** launching Genshin Impact, or before
 logging in.
 
 Genshin communicates over **UDP ports 22101 and 22102**.
+
+On Windows, the [desktop app](#desktop-app-egui) can capture live traffic with
+the built-in PktMon service; no Npcap or WinPcap installation is needed. Press
+**Live capture** before launching the game; Windows asks for administrator
+rights if the app is not already elevated.
 
 ```console
 # Linux
@@ -206,17 +212,27 @@ modules and `fetch` do not work from `file://`).
 
 ## Desktop app (egui)
 
-A native desktop front end lives in [`gui/`](gui). It calls
-[`decode_capture_file`](src/api.rs) directly, so no WebAssembly or web server is
-involved. The start screen offers **Open capture file** and a disabled **Live
-capture** placeholder. Choosing a capture starts decoding immediately; the app
-shows a centered `Decoding...` label, then a compact summary of the decoded
-characters, artifacts, weapons, items, Mora and achievements together with any
-warnings and a large **Export GOOD** button. When the capture contains completed
-achievements, a separate **Export achievements** button appears. Capture files
-can also be dropped on the window, and a small option below the buttons enables
-the fourth-substat workaround. Keyboard shortcuts: `Ctrl+O` open, `Ctrl+S`
-export.
+A native desktop front end lives in [`gui/`](gui). It uses the library directly,
+so no WebAssembly or web server is involved. The start screen offers
+**Open capture file** and, on Windows, **Live capture**. Choosing a capture
+starts decoding immediately; the app shows a centered `Decoding...` label, then
+a compact summary of the decoded characters, artifacts, weapons, items, Mora and
+achievements together with any warnings and a large **Export GOOD** button. When
+the capture contains completed achievements, a separate **Export achievements**
+button appears. Capture files can also be dropped on the window, and a small
+option below the buttons enables the fourth-substat workaround. Keyboard
+shortcuts: `Ctrl+O` open, `Ctrl+S` export.
+
+Live capture uses the Windows PktMon service through the [`pktmon`] crate. If
+the app is not already elevated, pressing **Live capture** restarts it through
+the Windows UAC prompt. Capture is filtered to UDP ports 22101 and 22102.
+Packets are decoded on a worker thread as they arrive, and the app updates
+packet, command, flow and decoded-data counts about four times per second while
+the session is open. Press **Stop capture** to finish the session and export the
+GOOD data. Start the live capture before launching Genshin Impact or before
+logging in, because the login handshake is needed to derive the session key.
+
+[`pktmon`]: https://crates.io/crates/pktmon
 
 ```console
 # Run without a capture pre-selected:
@@ -224,6 +240,9 @@ $ cargo run --manifest-path gui/Cargo.toml
 
 # Or open a capture straight away:
 $ cargo run --manifest-path gui/Cargo.toml -- capture.pcap
+
+# Live capture prompts for administrator rights if needed:
+$ cargo run --manifest-path gui/Cargo.toml
 ```
 
 Build a release binary with:
@@ -234,8 +253,8 @@ $ cargo build --release --manifest-path gui/Cargo.toml
 
 The app uses `eframe`/`egui` for rendering and `rfd` for native file dialogs.
 It needs an OpenGL-capable desktop; on Linux that means X11 or Wayland (the file
-dialogs use the XDG desktop portal). Like the rest of the tool it only reads
-capture files; live capture is not included.
+dialogs use the XDG desktop portal). Live capture is Windows-only; on other
+platforms the app only reads capture files.
 
 ## Deploying to GitHub Pages
 
@@ -258,11 +277,12 @@ Nothing generated or machine-specific is committed: `3rdparty/`, `target/`,
 
 ## Differences from Irminsul
 
-- Reads a capture file instead of capturing live traffic; no admin/root rights
-  and no Npcap/pktmon dependency to decode.
-- Command line plus a static in-browser (WASM) front end and a native egui
-  desktop app; no live capture, update checker or wish history.
+- The CLI and web page read a capture file instead of capturing live traffic; no
+  admin/root rights and no Npcap/pktmon dependency to decode.
+- The native desktop app adds live capture on Windows through PktMon, plus a
+  static in-browser (WASM) front end and the command line tool.
 - Handles `.pcap` and `.pcapng` files with legacy pcap and pcapng sections.
+- No update checker or wish history.
 
 ## License
 

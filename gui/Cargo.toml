@@ -3,7 +3,7 @@ name = "pcap2good-gui"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-description = "egui desktop front end for pcap2good"
+description = "egui desktop front end with live PktMon capture for pcap2good"
 license = "MIT"
 
 [dependencies]
@@ -11,6 +11,9 @@ pcap2good = { path = ".." }
 eframe = "0.33"
 rfd = "0.17"
 serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+pktmon = "0.6.2"
 
 [profile.dev.package."*"]
 opt-level = 2

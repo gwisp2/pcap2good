@@ -206,6 +206,18 @@ pub struct DecodeResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+/// A non-consuming view of the pipeline's current state.
+///
+/// Unlike [`DecodeResult`] this can be produced while packets are still being
+/// processed, so a live capture can show statistics and decoded data as they
+/// arrive.
+#[derive(Debug)]
+pub struct DecodeSnapshot {
+    pub capture: CaptureStats,
+    pub decode: DecodeStats,
+    pub flows: Vec<flow::FlowOutcome>,
+}
+
 pub struct Pipeline {
     link: LinkNormalizer,
     udp: UdpDissector,
@@ -213,6 +225,7 @@ pub struct Pipeline {
     classifier: PacketClassifier,
     registry: FlowRegistry,
     diagnostics: DiagnosticSink,
+    packets: u64,
     udp_packets: u64,
     game_datagrams: u64,
 }
@@ -227,12 +240,15 @@ impl Pipeline {
             classifier: PacketClassifier,
             registry,
             diagnostics: DiagnosticSink::default(),
+            packets: 0,
             udp_packets: 0,
             game_datagrams: 0,
         }
     }
 
     pub fn process_frame(&mut self, frame: CapturedFrame) {
+        self.packets += 1;
+
         let Some(frame) = self.link.consume(frame, &mut self.diagnostics) else {
             return;
         };
@@ -254,16 +270,9 @@ impl Pipeline {
 
     pub fn finish(self, mut capture: CaptureStats) -> DecodeResult {
         let flows = self.registry.finish();
-        let mut decode = DecodeStats {
-            flows: flows.len() as u64,
-            udp_packets: self.udp_packets,
-            game_datagrams: self.game_datagrams,
-            ..DecodeStats::default()
-        };
-        for flow in &flows {
-            add_stats(&mut decode, &flow.stats);
-        }
+        let decode = aggregate_stats(&flows, self.udp_packets, self.game_datagrams);
 
+        capture.packets = self.packets;
         capture.unsupported_packets = self.link.unsupported_packets;
         capture.game_packets = self.game_datagrams;
 
@@ -274,6 +283,42 @@ impl Pipeline {
             diagnostics: self.diagnostics.entries,
         }
     }
+
+    /// Returns the current statistics and decoded data without consuming the
+    /// pipeline.
+    pub fn snapshot(&self) -> DecodeSnapshot {
+        let flows = self.registry.snapshot();
+        let decode = aggregate_stats(&flows, self.udp_packets, self.game_datagrams);
+        let capture = CaptureStats {
+            packets: self.packets,
+            game_packets: self.game_datagrams,
+            unsupported_packets: self.link.unsupported_packets,
+            truncated: false,
+        };
+
+        DecodeSnapshot {
+            capture,
+            decode,
+            flows,
+        }
+    }
+}
+
+fn aggregate_stats(
+    flows: &[flow::FlowOutcome],
+    udp_packets: u64,
+    game_datagrams: u64,
+) -> DecodeStats {
+    let mut decode = DecodeStats {
+        flows: flows.len() as u64,
+        udp_packets,
+        game_datagrams,
+        ..DecodeStats::default()
+    };
+    for flow in flows {
+        add_stats(&mut decode, &flow.stats);
+    }
+    decode
 }
 
 fn add_stats(total: &mut DecodeStats, flow: &FlowStats) {

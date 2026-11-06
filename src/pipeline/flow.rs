@@ -186,6 +186,34 @@ impl FlowHandler for FlowPipeline {
     }
 }
 
+impl FlowPipeline {
+    /// Exports the flow's current state without consuming it.
+    ///
+    /// Live capture uses this to publish statistics and decoded data while the
+    /// connection is still open.
+    pub fn snapshot(&self) -> FlowOutcome {
+        let mut stats = self.stats;
+        stats.malformed_commands = self.framer.malformed_commands;
+
+        FlowOutcome {
+            id: self.id,
+            key: self.key,
+            first_seen: self.first_seen,
+            last_seen: self.last_seen,
+            good: self
+                .router
+                .sinks
+                .player
+                .data
+                .export_genshin_optimizer(&self.shared.export_settings),
+            achievements: self.router.sinks.achievements.store.clone(),
+            stats,
+            images: self.router.sinks.images.store.clone(),
+            warnings: Vec::new(),
+        }
+    }
+}
+
 pub struct FlowPipelineFactory {
     pub shared: Arc<SharedContext>,
     pub sink_factory: Arc<dyn FlowSinkFactory>,
@@ -298,6 +326,14 @@ impl FlowRegistry {
         }
 
         let mut flows = self.finished;
+        flows.sort_by_key(|flow| (flow.first_seen, flow.id));
+        flows
+    }
+
+    /// Every flow seen so far, including the ones that are still open.
+    pub fn snapshot(&self) -> Vec<FlowOutcome> {
+        let mut flows = self.finished.clone();
+        flows.extend(self.active.values().map(FlowPipeline::snapshot));
         flows.sort_by_key(|flow| (flow.first_seen, flow.id));
         flows
     }

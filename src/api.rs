@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::achievements::{AchievementExport, AchievementStore};
 use crate::capture::{self, CaptureStats};
-use crate::decode::{DecodeResult, DecodeStats, Decoder};
+use crate::decode::{DecodeResult, DecodeSnapshot, DecodeStats, Decoder};
 use crate::good::Good;
 use crate::pipeline::flow::{FlowId, FlowOutcome, FlowStats};
 use crate::pipeline::{Warning, WarningCode};
@@ -58,10 +58,30 @@ fn finish(result: DecodeResult) -> DecodeOutcome {
     let DecodeResult {
         capture,
         decode,
-        mut flows,
+        flows,
         diagnostics: _,
     } = result;
 
+    finish_parts(capture, decode, flows)
+}
+
+/// Turns a live pipeline snapshot into an outcome, using the same flow
+/// selection and warning rules as a finished capture.
+pub fn snapshot_outcome(snapshot: DecodeSnapshot) -> DecodeOutcome {
+    let DecodeSnapshot {
+        capture,
+        decode,
+        flows,
+    } = snapshot;
+
+    finish_parts(capture, decode, flows)
+}
+
+fn finish_parts(
+    capture: CaptureStats,
+    decode: DecodeStats,
+    mut flows: Vec<FlowOutcome>,
+) -> DecodeOutcome {
     for flow in &mut flows {
         flow.warnings = warnings(&flow.stats);
     }
@@ -79,12 +99,15 @@ fn finish(result: DecodeResult) -> DecodeOutcome {
     let selected_flow = selected.map(|flow| flow.id);
 
     let mut warnings = warnings(&selected_stats);
-    if flows.len() > 1 {
+    let player_data_flows = flows.iter().filter(|flow| has_player_data(flow)).count();
+    if player_data_flows > 1 {
         warnings.push(Warning::new(
-            WarningCode::MultipleFlows { count: flows.len() },
+            WarningCode::MultipleFlows {
+                count: player_data_flows,
+            },
             format!(
-                "the capture contains {} game flows; only the first flow with player data is exported",
-                flows.len()
+                "the capture contains {player_data_flows} game flows with player data; only the \
+                 first one is exported"
             ),
             "run the decoder per connection if you need every flow",
         ));

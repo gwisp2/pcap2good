@@ -3,7 +3,7 @@ name = "pcap2good"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-description = "Offline GOOD exporter for Genshin Impact packet captures"
+description = "GOOD exporter for Genshin Impact packet captures"
 license = "MIT"
 
 [[bin]]

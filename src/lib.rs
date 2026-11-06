@@ -1,8 +1,12 @@
-//! Offline GOOD exporter for Genshin Impact packet captures.
+//! GOOD exporter for Genshin Impact packet captures.
 //!
 //! The library exposes [`decode_capture_file`] and [`decode_capture_bytes`],
 //! which return the GOOD document together with capture statistics and
 //! warnings. The CLI and the wasm build are thin wrappers around them.
+//!
+//! For live capture, feed packets to [`decode::Decoder`] as they arrive and
+//! call [`decode::Decoder::snapshot`] (or [`snapshot_outcome`]) to publish
+//! statistics and decoded data without ending the session.
 
 pub mod achievements;
 pub mod api;
@@ -18,8 +22,8 @@ pub mod proto_json;
 pub use achievements::{
     Achievement, AchievementExport, AchievementStore, matches_achievement_packet,
 };
-pub use api::{DecodeOutcome, decode_capture_bytes, decode_capture_file};
-pub use pipeline::{Warning, WarningCode};
+pub use api::{DecodeOutcome, decode_capture_bytes, decode_capture_file, snapshot_outcome};
+pub use pipeline::{DecodeSnapshot, Warning, WarningCode};
 pub use player_data::ExportSettings;
 
 #[cfg(target_arch = "wasm32")]

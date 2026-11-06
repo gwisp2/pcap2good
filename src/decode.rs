@@ -17,7 +17,7 @@ use crate::player_data::ExportSettings;
 
 static DATABASE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/game_data.gz"));
 
-pub use crate::pipeline::{DecodeResult, DecodeStats};
+pub use crate::pipeline::{DecodeResult, DecodeSnapshot, DecodeStats};
 
 pub struct Decoder {
     pipeline: Pipeline,
@@ -68,6 +68,11 @@ impl Decoder {
 
     pub fn process_frame(&mut self, frame: CapturedFrame) {
         self.pipeline.process_frame(frame);
+    }
+
+    /// Returns statistics and decoded data without ending the session.
+    pub fn snapshot(&self) -> DecodeSnapshot {
+        self.pipeline.snapshot()
     }
 
     pub fn finish(self, capture: CaptureStats) -> DecodeResult {

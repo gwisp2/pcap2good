@@ -8,6 +8,8 @@ use pcap2good::auto_artifactarium::r#gen::protos::{
     AvatarDataNotify, AvatarInfo, Equip, Item, Material, PacketWithItems, PropMapEntry, PropValue,
     Reliquary, Weapon, equip, item,
 };
+use pcap2good::decode::Decoder;
+use pcap2good::pipeline::{CapturedFrame, LinkType, Timestamp};
 use pcap2good::player_data::PROP_PLAYER_SCOIN;
 use protobuf::Message;
 
@@ -440,6 +442,40 @@ fn decodes_characters_weapons_and_artifacts() {
         stderr.contains("Exported 1 characters, 1 artifacts, 1 weapons"),
         "unexpected stderr: {stderr}"
     );
+}
+
+#[test]
+fn live_snapshot_updates_without_finishing_the_decoder() {
+    let frames = capture_with_game_data();
+    let mut decoder = Decoder::new().unwrap();
+
+    for (index, frame) in frames.iter().enumerate() {
+        decoder.process_frame(CapturedFrame {
+            timestamp: Timestamp::from_parts(0, index as u32 * 1_000),
+            link_type: LinkType(1),
+            data: frame.clone(),
+        });
+    }
+
+    let snapshot = pcap2good::snapshot_outcome(decoder.snapshot());
+    assert_eq!(snapshot.capture.packets, frames.len() as u64);
+    assert_eq!(snapshot.decode.commands, 3);
+    assert_eq!(snapshot.good.characters.len(), 1);
+    assert_eq!(snapshot.good.characters[0].level, 90);
+    assert_eq!(snapshot.good.artifacts.len(), 1);
+    assert_eq!(snapshot.good.weapons.len(), 1);
+    assert_eq!(snapshot.good.materials["Mora"], 123_456);
+
+    // Snapshotting is non-consuming, so another update still sees the data.
+    let later = pcap2good::snapshot_outcome(decoder.snapshot());
+    assert_eq!(later.good.characters.len(), 1);
+    assert_eq!(later.capture.packets, frames.len() as u64);
+
+    // The decoder can still be finished normally after taking snapshots.
+    let finished = decoder.finish(Default::default());
+    assert_eq!(finished.decode.commands, 3);
+    assert_eq!(finished.capture.packets, frames.len() as u64);
+    assert_eq!(finished.flows[0].good.characters.len(), 1);
 }
 
 #[test]
@@ -952,6 +988,25 @@ fn selects_the_first_flow_with_player_data() {
     assert_eq!(outcome.selected_flow, Some(outcome.flows[1].id));
     assert_eq!(outcome.good.characters.len(), 1);
     assert_eq!(outcome.good.characters[0].level, 80);
+    assert!(!outcome.warnings.iter().any(|warning| matches!(
+        warning.code,
+        pcap2good::WarningCode::MultipleFlows { .. }
+    )));
+}
+
+#[test]
+fn multiple_flows_without_player_data_do_not_warn() {
+    let frames = vec![handshake_frame(40000), handshake_frame(40001)];
+
+    let outcome =
+        pcap2good::decode_capture_bytes(&pcap_bytes(&frames), &Default::default(), None)
+            .unwrap();
+
+    assert_eq!(outcome.flows.len(), 2);
+    assert!(!outcome.warnings.iter().any(|warning| matches!(
+        warning.code,
+        pcap2good::WarningCode::MultipleFlows { .. }
+    )));
 }
 
 #[test]
